@@ -3,7 +3,7 @@ import httpx
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import re
-from typing import Optional
+from typing import Optional, Tuple
 from app.config import amsterdam_now, AMSTERDAM_TZ
 
 # P2000 data sources
@@ -18,6 +18,9 @@ P2000_RSS_FEEDS = [
 
 # Amsterdam region codes
 AMSTERDAM_REGIONS = ["Amsterdam", "Amstelland", "Zaanstreek", "Noord-Holland"]
+
+# Geocoding cache to avoid repeated API calls
+_geocoding_cache = {}
 
 async def get_emergency_data() -> dict:
     """Fetch P2000 emergency data for Amsterdam region"""
@@ -61,8 +64,20 @@ async def get_emergency_data() -> dict:
     except Exception as e:
         print(f"Error fetching P2000 data: {e}")
 
+    # Geocode locations for mapping (async, but don't block)
+    # We'll geocode a subset to avoid rate limits
+    geocoded_incidents = []
+    for incident in incidents[:25]:
+        if incident.get("location") and incident["location"] != "Amsterdam":
+            # Try to geocode (non-blocking, will add coords if successful)
+            coords = await geocode_address(incident["location"])
+            if coords:
+                incident["lat"] = coords[0]
+                incident["lng"] = coords[1]
+        geocoded_incidents.append(incident)
+    
     return {
-        "incidents": incidents[:25],  # Latest 25 incidents
+        "incidents": geocoded_incidents,
         "updated": amsterdam_now().strftime("%H:%M:%S"),
         "status": "live" if is_live_data else "simulated"
     }
@@ -105,12 +120,14 @@ def parse_p2000_html(html_content: str) -> list:
         # Extract location from message
         location = extract_location(message) or region or "Amsterdam"
         
-        incidents.append({
+        incident = {
             "type": incident_type,
             "text": clean_text(message),
             "location": location,
             "time": time_str
-        })
+        }
+        
+        incidents.append(incident)
     
     return incidents
 
@@ -145,12 +162,14 @@ def parse_p2000_feed(xml_content: str) -> list:
             # Include if Amsterdam region, nearby, or if we need more incidents
             if is_amsterdam or is_nearby or len(incidents) < 15:
                 incident_type = classify_incident(title)
-                incidents.append({
+                location = extract_location(title + " " + desc) or "Amsterdam"
+                incident = {
                     "type": incident_type,
                     "text": clean_text(title),
-                    "location": extract_location(desc) or "Amsterdam",
+                    "location": location,
                     "time": parse_time(date_match.group(1) if date_match else None)
-                })
+                }
+                incidents.append(incident)
 
     return incidents
 
@@ -177,10 +196,67 @@ def clean_text(text: str) -> str:
 
 def extract_location(text: str) -> Optional[str]:
     """Try to extract location from text"""
-    # Look for street patterns
-    street_match = re.search(r'(\w+straat|\w+weg|\w+laan|\w+plein)', text, re.IGNORECASE)
-    if street_match:
-        return street_match.group(1)
+    # Look for street patterns (more comprehensive)
+    patterns = [
+        r'([A-Z][a-z]+(?:straat|weg|laan|plein|kade|gracht|dijk|singel|park|hof|plantsoen|brug))',
+        r'([A-Z][a-z]+(?:straat|weg|laan|plein|kade|gracht|dijk|singel|park|hof|plantsoen|brug)\s+\d+)',
+        r'(\d+\s+[A-Z][a-z]+(?:straat|weg|laan|plein|kade|gracht|dijk|singel|park|hof|plantsoen|brug))',
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+    
+    # Also check for known Amsterdam areas/districts
+    amsterdam_areas = [
+        "Centrum", "Jordaan", "De Pijp", "Oud-West", "Oud-Zuid", "Nieuw-West",
+        "Noord", "Oost", "Zuidoost", "West", "Zuid", "Amstelveen", "Diemen"
+    ]
+    for area in amsterdam_areas:
+        if area.lower() in text.lower():
+            return area
+    
+    return None
+
+async def geocode_address(address: str) -> Optional[Tuple[float, float]]:
+    """Geocode an address to lat/lng using OpenStreetMap Nominatim"""
+    if not address or address == "Amsterdam":
+        return None
+    
+    # Check cache first
+    if address in _geocoding_cache:
+        return _geocoding_cache[address]
+    
+    try:
+        # Add Amsterdam context for better results
+        query = f"{address}, Amsterdam, Netherlands"
+        
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={
+                    "q": query,
+                    "format": "json",
+                    "limit": 1,
+                    "countrycodes": "nl"
+                },
+                headers={
+                    "User-Agent": "AmsterdamMonitor/1.0"  # Required by Nominatim
+                }
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data and len(data) > 0:
+                    lat = float(data[0]["lat"])
+                    lng = float(data[0]["lon"])
+                    # Cache the result
+                    _geocoding_cache[address] = (lat, lng)
+                    return (lat, lng)
+    except Exception as e:
+        print(f"Geocoding error for {address}: {e}")
+    
     return None
 
 def parse_time(date_str: Optional[str]) -> str:
