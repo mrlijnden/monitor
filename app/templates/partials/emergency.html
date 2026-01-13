@@ -1,0 +1,18 @@
+{% if emergency and emergency.incidents %}
+{% for incident in emergency.incidents %}
+<div class="emergency-item">
+    <span class="emergency-type {{ incident.type }}">
+        {% if incident.type == 'fire' %}BRAND{% elif incident.type == 'ambulance' %}A1{% else %}POL{% endif %}
+    </span>
+    <span class="emergency-text">{{ incident.text }}</span>
+    <span class="emergency-time">{{ incident.time }}</span>
+</div>
+{% endfor %}
+<div class="freshness">Updated: {{ emergency.updated }} | {{ emergency.status|upper }}</div>
+{% else %}
+<div class="info-message">
+    <span class="status-dot online"></span>
+    Scanning P2000 frequencies...<br>
+    <small style="color: var(--text-dim);">No incidents in Amsterdam region</small>
+</div>
+{% endif %}

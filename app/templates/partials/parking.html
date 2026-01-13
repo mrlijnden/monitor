@@ -1,0 +1,21 @@
+{% if parking.garages %}
+<div class="parking-grid">
+{% for garage in parking.garages %}
+<div class="parking-item">
+    <div class="parking-name">{{ garage.name[:20] }}</div>
+    <div class="parking-stats">
+        <span class="parking-free {% if garage.free_spaces > 100 %}good{% elif garage.free_spaces > 20 %}moderate{% else %}low{% endif %}">
+            {{ garage.free_spaces }}
+        </span>
+        <span class="parking-capacity">/ {{ garage.capacity }}</span>
+    </div>
+    <div class="parking-bar">
+        <div class="parking-fill {% if garage.occupancy > 90 %}critical{% elif garage.occupancy > 70 %}warning{% else %}ok{% endif %}"
+             style="width: {{ garage.occupancy }}%"></div>
+    </div>
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="info-message">No parking data available</div>
+{% endif %}

@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AMSTERDAM SITUATION MONITOR</title>
+    <link rel="stylesheet" href="/static/css/bloomberg.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body class="has-ticker">
+    <!-- Matrix Rain Background -->
+    <canvas id="matrix-rain"></canvas>
+
+    <!-- CRT Scanlines Overlay -->
+    <div class="scanlines"></div>
+
+    <!-- News Ticker -->
+    <div class="news-ticker">
+        <div class="ticker-label">LIVE</div>
+        <div class="ticker-content">
+            <div class="ticker-scroll" id="ticker-scroll"
+                 hx-get="/partial/ticker"
+                 hx-trigger="load, every 60s"
+                 hx-swap="innerHTML">
+                <span class="ticker-item">Loading Amsterdam feeds...</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard grid-6x3" hx-ext="sse" sse-connect="/sse/updates">
+        <!-- Row 1: Map (2x2), Weather, Transit, Trains, Flights -->
+
+        <!-- Interactive Map Panel (spans 2x2) -->
+        <div class="panel panel-map" id="panel-map">
+            <div class="panel-header">
+                <span class="panel-title glitch">Live Map</span>
+                <span class="panel-badge">REAL-TIME</span>
+            </div>
+            <div class="panel-content" style="padding: 0;">
+                <div id="map" class="map-container"></div>
+            </div>
+        </div>
+
+        <!-- Weather Panel -->
+        <div class="panel" id="panel-weather">
+            <div class="panel-header">
+                <span class="panel-title">Weather</span>
+                <span class="panel-badge">AMS</span>
+            </div>
+            <div class="panel-content"
+                 hx-get="/partial/weather"
+                 hx-trigger="sse:update[event.detail=='weather'] from:body"
+                 hx-swap="innerHTML">
+                {% include "partials/weather.html" %}
+            </div>
+        </div>
+
+        <!-- Hacker News Panel (moved up) -->
+        <div class="panel" id="panel-hackernews">
+            <div class="panel-header">
+                <span class="panel-title">Hacker News</span>
+                <span class="panel-badge hn">HN</span>
+            </div>
+            <div class="panel-content"
+                 hx-get="/partial/hackernews"
+                 hx-trigger="sse:update[event.detail=='hackernews'] from:body"
+                 hx-swap="innerHTML">
+                {% include "partials/hackernews.html" %}
+            </div>
+        </div>
+
+        <!-- Markets Panel (moved up) -->
+        <div class="panel" id="panel-markets">
+            <div class="panel-header">
+                <span class="panel-title">Markets</span>
+                <span class="panel-badge">LIVE</span>
+            </div>
+            <div class="panel-content"
+                 hx-get="/partial/markets"
+                 hx-trigger="sse:update[event.detail=='markets'] from:body"
+                 hx-swap="innerHTML">
+                {% include "partials/markets.html" %}
+            </div>
+        </div>
+
+        <!-- Schiphol Flights Panel -->
+        <div class="panel" id="panel-flights">
+            <div class="panel-header">
+                <span class="panel-title">Schiphol</span>
+                <span class="panel-badge flight">AMS</span>
+            </div>
+            <div class="panel-content"
+                 hx-get="/partial/flights"
+                 hx-trigger="load, every 120s"
+                 hx-swap="innerHTML">
+                <div class="loading">Loading flights...</div>
+            </div>
+        </div>
+
+        <!-- Row 2: (Map continues), News, P2000 Emergency, Cameras, Extra -->
+
+        <!-- Dutch News Panel -->
+        <div class="panel" id="panel-news">
+            <div class="panel-header">
+                <span class="panel-title">NL News</span>
+                <span class="panel-badge">NOS</span>
+            </div>
+            <div class="panel-content"
+                 hx-get="/partial/news"
+                 hx-trigger="sse:update[event.detail=='news'] from:body"
+                 hx-swap="innerHTML">
+                {% include "partials/news.html" %}
+            </div>
+        </div>
+
+        <!-- P2000 Emergency Scanner Panel -->
+        <div class="panel panel-emergency" id="panel-emergency">
+            <div class="panel-header">
+                <span class="panel-title"><span class="status-dot online"></span>P2000 Scanner</span>
+                <span class="panel-badge emergency">LIVE</span>
+            </div>
+            <div class="panel-content"
+                 hx-get="/partial/emergency"
+                 hx-trigger="load, every 30s"
+                 hx-swap="innerHTML">
+                <div class="loading">Scanning emergency frequencies...</div>
+            </div>
+        </div>
+
+        <!-- Live Cameras Panel -->
+        <div class="panel" id="panel-cameras">
+            <div class="panel-header">
+                <span class="panel-title">Live Cameras</span>
+                <span class="panel-badge camera">CAM</span>
+            </div>
+            <div class="panel-content" style="padding: 0;"
+                 hx-get="/partial/cameras"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <div class="camera-container">
+                    <div class="loading" style="padding: 10px;">Loading cameras...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Status Panel -->
+        <div class="panel" id="panel-system">
+            <div class="panel-header">
+                <span class="panel-title">System</span>
+                <span class="panel-badge">SYS</span>
+            </div>
+            <div class="panel-content">
+                <div style="text-align: center; padding: 15px;">
+                    <div style="font-size: 20px; color: var(--accent-cyan); margin-bottom: 8px;">AMSTERDAM</div>
+                    <div style="font-size: 9px; color: var(--text-muted);">SITUATION MONITOR v2.0</div>
+                    <div style="font-size: 8px; color: var(--text-dim); margin-top: 12px;">
+                        <span class="status-dot online"></span> All systems operational
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 3: Bikes, Air Quality, Parking, Extra panels -->
+
+        <!-- Cycling Panel -->
+        <div class="panel" id="panel-bikes">
+            <div class="panel-header">
+                <span class="panel-title">Cycling</span>
+                <span class="panel-badge bike">BIKE</span>
+            </div>
+            <div class="panel-content"
+                 hx-get="/partial/bikes"
+                 hx-trigger="sse:update[event.detail=='bikes'] from:body"
+                 hx-swap="innerHTML">
+                {% include "partials/bikes.html" %}
+            </div>
+        </div>
+
+        <!-- Air Quality Panel -->
+        <div class="panel" id="panel-air-quality">
+            <div class="panel-header">
+                <span class="panel-title">Air Quality</span>
+                <span class="panel-badge">EU AQI</span>
+            </div>
+            <div class="panel-content"
+                 hx-get="/partial/air_quality"
+                 hx-trigger="sse:update[event.detail=='air_quality'] from:body"
+                 hx-swap="innerHTML">
+                {% include "partials/air_quality.html" %}
+            </div>
+        </div>
+
+        <!-- Parking Panel -->
+        <div class="panel" id="panel-parking">
+            <div class="panel-header">
+                <span class="panel-title">Parking</span>
+                <span class="panel-badge">P+R</span>
+            </div>
+            <div class="panel-content"
+                 hx-get="/partial/parking"
+                 hx-trigger="sse:update[event.detail=='parking'] from:body"
+                 hx-swap="innerHTML">
+                {% include "partials/parking.html" %}
+            </div>
+        </div>
+    </div>
+
+    <div class="clock-widget">
+        <div class="clock-time" id="clock">--:--:--</div>
+        <div id="clock-date">---</div>
+    </div>
+
+    <script>
+        // Clock
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dateStr = now.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+            document.getElementById('clock').textContent = timeStr;
+            document.getElementById('clock-date').textContent = dateStr;
+        }
+        updateClock();
+        setInterval(updateClock, 1000);
+
+        // Matrix Rain Effect
+        const canvas = document.getElementById('matrix-rain');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF';
+        const charArray = chars.split('');
+        const fontSize = 14;
+        const columns = canvas.width / fontSize;
+        const drops = [];
+
+        for (let i = 0; i < columns; i++) {
+            drops[i] = Math.random() * -100;
+        }
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(10, 10, 10, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#00ff00';
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const char = charArray[Math.floor(Math.random() * charArray.length)];
+                ctx.fillText(char, i * fontSize, drops[i] * fontSize);
+
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+
+        setInterval(drawMatrix, 50);
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        // Initialize Leaflet Map with real-time transit
+        document.addEventListener('DOMContentLoaded', function() {
+            const map = L.map('map', {
+                zoomControl: false,
+                attributionControl: false
+            }).setView([52.3676, 4.9041], 13);
+
+            // Dark theme tiles
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19
+            }).addTo(map);
+
+            // Landmark markers
+            const landmarks = [
+                { lat: 52.3791, lng: 4.8980, title: 'Centraal Station', type: 'transit' },
+                { lat: 52.3702, lng: 4.8952, title: 'Dam Square', type: 'landmark' },
+                { lat: 52.3080, lng: 4.7621, title: 'Schiphol Airport', type: 'airport' }
+            ];
+
+            landmarks.forEach(m => {
+                const color = m.type === 'transit' ? '#00cccc' : m.type === 'airport' ? '#ffcc00' : '#ff00ff';
+                L.circleMarker([m.lat, m.lng], {
+                    radius: 6,
+                    fillColor: color,
+                    color: color,
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map).bindPopup(`<b>${m.title}</b>`);
+            });
+
+            // Layers for different data
+            let vehicleLayer = L.layerGroup().addTo(map);
+            let emergencyLayer = L.layerGroup().addTo(map);
+
+            // Vehicle icons
+            const vehicleIcons = {
+                'tram': L.divIcon({
+                    html: '<div class="vehicle-icon tram">🚊</div>',
+                    className: 'vehicle-div-icon',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                }),
+                'metro': L.divIcon({
+                    html: '<div class="vehicle-icon metro">🚇</div>',
+                    className: 'vehicle-div-icon',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                }),
+                'bus': L.divIcon({
+                    html: '<div class="vehicle-icon bus">🚌</div>',
+                    className: 'vehicle-div-icon',
+                    iconSize: [18, 18],
+                    iconAnchor: [9, 9]
+                }),
+                'ferry': L.divIcon({
+                    html: '<div class="vehicle-icon ferry">⛴️</div>',
+                    className: 'vehicle-div-icon',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            };
+
+            // Colors for popups
+            const vehicleColors = {
+                'tram': '#ff6600',
+                'metro': '#0088ff',
+                'bus': '#00cc00',
+                'ferry': '#00cccc'
+            };
+
+            // Colors for emergency types
+            const emergencyColors = {
+                'fire': '#ff0000',
+                'ambulance': '#ff9900',
+                'police': '#0066ff'
+            };
+
+            // Fetch and update vehicle positions
+            async function updateVehicles() {
+                try {
+                    const response = await fetch('/api/map/vehicles');
+                    const data = await response.json();
+
+                    vehicleLayer.clearLayers();
+
+                    data.vehicles.forEach(v => {
+                        const icon = vehicleIcons[v.type] || vehicleIcons['bus'];
+                        const color = vehicleColors[v.type] || '#ffffff';
+
+                        const marker = L.marker([v.lat, v.lng], { icon: icon });
+
+                        const delayText = v.delay > 0 ? ` <span style="color:#ff3333">(+${v.delay}min)</span>` : '';
+                        const emoji = v.type === 'tram' ? '🚊' : v.type === 'metro' ? '🚇' : v.type === 'ferry' ? '⛴️' : '🚌';
+
+                        marker.bindPopup(`
+                            <b style="color:${color}">${emoji} ${v.type.toUpperCase()} ${v.line}</b>${delayText}<br>
+                            → ${v.destination}<br>
+                            <small style="color:#888">${v.operator}</small>
+                        `);
+
+                        vehicleLayer.addLayer(marker);
+                    });
+                } catch (e) {
+                    console.error('Failed to fetch vehicles:', e);
+                }
+            }
+
+            // Emergency icons
+            const emergencyIcons = {
+                'fire': L.divIcon({
+                    html: '<div class="emergency-icon fire">🚒</div>',
+                    className: 'emergency-div-icon',
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                }),
+                'ambulance': L.divIcon({
+                    html: '<div class="emergency-icon ambulance">🚑</div>',
+                    className: 'emergency-div-icon',
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                }),
+                'police': L.divIcon({
+                    html: '<div class="emergency-icon police">🚔</div>',
+                    className: 'emergency-div-icon',
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                })
+            };
+
+            // Fetch and update P2000 emergency incidents
+            async function updateEmergencies() {
+                try {
+                    const response = await fetch('/api/emergency');
+                    const data = await response.json();
+
+                    emergencyLayer.clearLayers();
+
+                    data.incidents.forEach(inc => {
+                        if (inc.lat && inc.lng) {
+                            const icon = emergencyIcons[inc.type] || emergencyIcons['ambulance'];
+                            const color = emergencyColors[inc.type] || '#ff0000';
+
+                            const marker = L.marker([inc.lat, inc.lng], { icon: icon });
+
+                            const typeLabel = inc.type === 'fire' ? '🚒 BRAND' :
+                                            inc.type === 'ambulance' ? '🚑 AMBULANCE' : '🚔 POLITIE';
+
+                            marker.bindPopup(`
+                                <div style="min-width: 180px;">
+                                    <b style="color:${color}; font-size: 13px;">${typeLabel}</b><br>
+                                    <span style="font-size: 11px;">${inc.text}</span><br>
+                                    <small style="color: #888;">${inc.location} - ${inc.time}</small>
+                                </div>
+                            `);
+
+                            emergencyLayer.addLayer(marker);
+                        }
+                    });
+
+                    console.log(`Map: ${data.incidents.length} emergencies`);
+                } catch (e) {
+                    console.error('Failed to fetch emergencies:', e);
+                }
+            }
+
+            // Add legend to map
+            const legend = L.control({position: 'bottomleft'});
+            legend.onAdd = function(map) {
+                const div = L.DomUtil.create('div', 'map-legend');
+                div.innerHTML = `
+                    <div style="font-weight: bold; margin-bottom: 5px; color: #fff;">LEGEND</div>
+                    <div style="font-size: 9px; color: #888; margin-bottom: 4px;">— OV —</div>
+                    <div class="map-legend-item"><span style="margin-right: 6px;">🚊</span> Tram</div>
+                    <div class="map-legend-item"><span style="margin-right: 6px;">🚇</span> Metro</div>
+                    <div class="map-legend-item"><span style="margin-right: 6px;">⛴️</span> Ferry</div>
+                    <div style="border-top: 1px solid #333; margin: 5px 0;"></div>
+                    <div style="font-size: 9px; color: #888; margin-bottom: 4px;">— P2000 —</div>
+                    <div class="map-legend-item"><span style="margin-right: 6px;">🚒</span> Brand</div>
+                    <div class="map-legend-item"><span style="margin-right: 6px;">🚑</span> Ambulance</div>
+                    <div class="map-legend-item"><span style="margin-right: 6px;">🚔</span> Politie</div>
+                `;
+                return div;
+            };
+            legend.addTo(map);
+
+            // Initial load and refresh intervals
+            updateVehicles();
+            updateEmergencies();
+            setInterval(updateVehicles, 10000);
+            setInterval(updateEmergencies, 30000);
+
+            // Pulse effect
+            setInterval(() => {
+                document.querySelectorAll('.leaflet-interactive').forEach(el => {
+                    el.style.filter = el.style.filter === 'brightness(1.3)' ? 'brightness(1)' : 'brightness(1.3)';
+                });
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

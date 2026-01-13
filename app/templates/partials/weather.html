@@ -1,0 +1,26 @@
+{% if weather.current %}
+<div class="weather-current">
+    <div class="weather-temp">
+        {{ weather.current.temperature | round | int }}<span>°C</span>
+    </div>
+    <div class="weather-details">
+        <div>{{ weather.current.description }}</div>
+        <div>Humidity: {{ weather.current.humidity }}%</div>
+        <div>Wind: {{ weather.current.wind_speed }} km/h</div>
+    </div>
+</div>
+{% else %}
+<div class="info-message">Weather data unavailable</div>
+{% endif %}
+
+{% if weather.forecast %}
+<div class="weather-forecast">
+    {% for day in weather.forecast %}
+    <div class="forecast-day">
+        <div class="forecast-date">{{ day.date[5:] }}</div>
+        <div class="forecast-temp">{{ day.temp_max | round | int }}°</div>
+        <div class="forecast-desc">{{ day.description[:12] }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

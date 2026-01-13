@@ -1,0 +1,1150 @@
+:root {
+    --bg-primary: #0a0a0a;
+    --bg-panel: #111111;
+    --bg-header: #1a1a1a;
+    --text-primary: #00ff00;
+    --text-secondary: #ffffff;
+    --text-muted: #666666;
+    --text-dim: #444444;
+    --border-color: #333333;
+    --accent-orange: #ff6600;
+    --accent-blue: #0088ff;
+    --accent-red: #ff3333;
+    --accent-yellow: #ffcc00;
+    --accent-cyan: #00cccc;
+    --accent-magenta: #ff00ff;
+    --aqi-green: #00e400;
+    --aqi-yellow: #ffff00;
+    --aqi-orange: #ff7e00;
+    --aqi-red: #ff0000;
+    --aqi-purple: #8f3f97;
+    --aqi-maroon: #7e0023;
+    --neon-glow: 0 0 5px #00ff00, 0 0 10px #00ff00, 0 0 15px #00ff00;
+    --neon-cyan: 0 0 5px #00cccc, 0 0 10px #00cccc, 0 0 20px #00cccc;
+    --neon-magenta: 0 0 5px #ff00ff, 0 0 10px #ff00ff, 0 0 20px #ff00ff;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 12px;
+    line-height: 1.3;
+    overflow: hidden;
+}
+
+/* 5x2 Grid Layout */
+.dashboard {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 2px;
+    height: 100vh;
+    padding: 2px;
+}
+
+.panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.panel-header {
+    background: var(--bg-header);
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.panel-title {
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+}
+
+.panel-badge {
+    font-size: 8px;
+    padding: 2px 5px;
+    border-radius: 2px;
+    background: var(--accent-blue);
+    color: var(--text-secondary);
+}
+
+.panel-badge.hn {
+    background: var(--accent-orange);
+}
+
+.panel-badge.bike {
+    background: var(--accent-cyan);
+}
+
+.panel-content {
+    flex: 1;
+    padding: 8px 10px;
+    overflow-y: auto;
+}
+
+.panel-content::-webkit-scrollbar {
+    width: 3px;
+}
+
+.panel-content::-webkit-scrollbar-track {
+    background: var(--bg-panel);
+}
+
+.panel-content::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+}
+
+/* Weather Panel */
+.weather-current {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.weather-temp {
+    font-size: 32px;
+    font-weight: bold;
+    color: var(--text-secondary);
+    margin-right: 15px;
+}
+
+.weather-temp span {
+    font-size: 16px;
+    color: var(--text-muted);
+}
+
+.weather-details {
+    font-size: 11px;
+}
+
+.weather-details div {
+    margin-bottom: 3px;
+}
+
+.weather-forecast {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+}
+
+.forecast-day {
+    text-align: center;
+    padding: 5px 2px;
+    background: var(--bg-header);
+    border-radius: 2px;
+}
+
+.forecast-date {
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.forecast-temp {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.forecast-desc {
+    font-size: 8px;
+    color: var(--text-primary);
+    margin-top: 2px;
+}
+
+/* News Panel */
+.news-item {
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.news-item:last-child {
+    border-bottom: none;
+}
+
+.news-title {
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-bottom: 3px;
+    line-height: 1.3;
+}
+
+.news-title a {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.news-title a:hover {
+    color: var(--accent-blue);
+}
+
+.news-meta {
+    font-size: 9px;
+    color: var(--text-muted);
+}
+
+.news-source {
+    color: var(--accent-orange);
+}
+
+.hn-score {
+    color: var(--accent-orange);
+}
+
+.hn-comments {
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.hn-comments:hover {
+    color: var(--accent-blue);
+}
+
+/* Transit Panel */
+.transit-item {
+    display: grid;
+    grid-template-columns: 40px 1fr 50px;
+    gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border-color);
+    align-items: center;
+}
+
+.transit-item:last-child {
+    border-bottom: none;
+}
+
+.transit-line {
+    font-weight: bold;
+    font-size: 12px;
+    color: var(--accent-orange);
+}
+
+.train-line {
+    color: var(--accent-yellow);
+}
+
+.transit-destination {
+    color: var(--text-secondary);
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.train-station {
+    display: block;
+    font-size: 9px;
+    color: var(--text-muted);
+}
+
+.transit-time {
+    text-align: right;
+    font-size: 12px;
+}
+
+.transit-time.soon {
+    color: var(--accent-red);
+    font-weight: bold;
+}
+
+.transit-time.normal {
+    color: var(--text-primary);
+}
+
+/* Events Panel */
+.event-item {
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.event-item:last-child {
+    border-bottom: none;
+}
+
+.event-name {
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-bottom: 2px;
+}
+
+.event-meta {
+    font-size: 9px;
+    color: var(--text-muted);
+}
+
+.event-venue {
+    color: var(--accent-blue);
+}
+
+.event-date {
+    color: var(--text-primary);
+}
+
+/* Air Quality Panel */
+.aqi-main {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.aqi-value {
+    font-size: 42px;
+    font-weight: bold;
+    margin-right: 15px;
+}
+
+.aqi-value.good { color: var(--aqi-green); }
+.aqi-value.moderate, .aqi-value.fair { color: var(--aqi-yellow); }
+.aqi-value.unhealthy-sensitive { color: var(--aqi-orange); }
+.aqi-value.unhealthy, .aqi-value.poor { color: var(--aqi-red); }
+.aqi-value.very-unhealthy, .aqi-value.very-poor { color: var(--aqi-purple); }
+.aqi-value.hazardous, .aqi-value.extremely-poor { color: var(--aqi-maroon); }
+
+.aqi-level {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.aqi-station {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 3px;
+}
+
+.pollutants {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+
+.pollutant {
+    background: var(--bg-header);
+    padding: 6px;
+    border-radius: 2px;
+    text-align: center;
+}
+
+.pollutant-name {
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.pollutant-value {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Markets Panel */
+.markets-section {
+    margin-bottom: 10px;
+}
+
+.markets-section:last-child {
+    margin-bottom: 0;
+}
+
+.section-title {
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.market-item {
+    display: grid;
+    grid-template-columns: 45px 1fr 60px;
+    gap: 6px;
+    padding: 4px 0;
+    align-items: center;
+}
+
+.market-symbol {
+    font-weight: bold;
+    font-size: 11px;
+    color: var(--accent-orange);
+}
+
+.market-price {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.market-change {
+    text-align: right;
+    font-size: 11px;
+}
+
+.market-change.positive {
+    color: var(--aqi-green);
+}
+
+.market-change.negative {
+    color: var(--accent-red);
+}
+
+/* Parking Panel */
+.parking-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.parking-item {
+    background: var(--bg-header);
+    padding: 6px;
+    border-radius: 2px;
+}
+
+.parking-name {
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.parking-stats {
+    margin-bottom: 4px;
+}
+
+.parking-free {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.parking-free.good { color: var(--aqi-green); }
+.parking-free.moderate { color: var(--aqi-yellow); }
+.parking-free.low { color: var(--accent-red); }
+
+.parking-capacity {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.parking-bar {
+    height: 3px;
+    background: var(--bg-primary);
+    border-radius: 1px;
+    overflow: hidden;
+}
+
+.parking-fill {
+    height: 100%;
+    transition: width 0.3s;
+}
+
+.parking-fill.ok { background: var(--aqi-green); }
+.parking-fill.warning { background: var(--aqi-orange); }
+.parking-fill.critical { background: var(--accent-red); }
+
+/* Bikes Panel */
+.bike-main {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.bike-score {
+    font-size: 38px;
+    font-weight: bold;
+    margin-right: 15px;
+}
+
+.bike-score.excellent { color: var(--aqi-green); }
+.bike-score.good { color: var(--aqi-yellow); }
+.bike-score.fair { color: var(--aqi-orange); }
+.bike-score.poor { color: var(--accent-red); }
+
+.bike-info {
+    flex: 1;
+}
+
+.bike-condition {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 3px;
+}
+
+.bike-tip {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.bike-current {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.bike-stat {
+    text-align: center;
+}
+
+.stat-label {
+    display: block;
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.stat-value {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.bike-forecast {
+    display: flex;
+    justify-content: space-between;
+}
+
+.forecast-hour {
+    text-align: center;
+    padding: 4px;
+    background: var(--bg-header);
+    border-radius: 2px;
+    flex: 1;
+    margin: 0 2px;
+}
+
+.hour-time {
+    display: block;
+    font-size: 9px;
+    color: var(--text-muted);
+}
+
+.hour-temp {
+    display: block;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.hour-rain {
+    display: block;
+    font-size: 9px;
+    color: var(--accent-blue);
+}
+
+.hour-rain.high {
+    color: var(--accent-red);
+}
+
+/* Clock Widget */
+.clock-widget {
+    position: fixed;
+    bottom: 8px;
+    right: 12px;
+    font-size: 10px;
+    color: var(--text-muted);
+    background: var(--bg-header);
+    padding: 4px 8px;
+    border-radius: 3px;
+    z-index: 100;
+    border: 1px solid var(--border-color);
+}
+
+.clock-time {
+    font-size: 16px;
+    color: var(--text-secondary);
+    font-weight: bold;
+}
+
+/* Loading state */
+.loading {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Error state */
+.error {
+    color: var(--accent-red);
+}
+
+/* Info message */
+.info-message {
+    color: var(--text-muted);
+    font-size: 10px;
+    padding: 8px;
+    text-align: center;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 1400px) {
+    .dashboard {
+        grid-template-columns: repeat(4, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 1000px) {
+    .dashboard {
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: repeat(5, 1fr);
+    }
+}
+
+/* ============================================
+   CYBERPUNK EFFECTS - GO WILD EDITION
+   ============================================ */
+
+/* CRT Scanlines Overlay */
+.scanlines {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1000;
+    background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.15),
+        rgba(0, 0, 0, 0.15) 1px,
+        transparent 1px,
+        transparent 2px
+    );
+}
+
+.scanlines::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.3) 100%);
+}
+
+/* Matrix Rain Canvas */
+#matrix-rain {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0.15;
+}
+
+/* News Ticker */
+.news-ticker {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 28px;
+    background: linear-gradient(90deg, #0a0a0a 0%, #111 50%, #0a0a0a 100%);
+    border-bottom: 1px solid var(--accent-cyan);
+    box-shadow: 0 2px 10px rgba(0, 204, 204, 0.3);
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+}
+
+.ticker-label {
+    background: var(--accent-red);
+    color: white;
+    padding: 4px 12px;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    flex-shrink: 0;
+    animation: pulse-bg 2s ease-in-out infinite;
+}
+
+@keyframes pulse-bg {
+    0%, 100% { background: var(--accent-red); }
+    50% { background: #ff0000; box-shadow: 0 0 10px #ff0000; }
+}
+
+.ticker-content {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.ticker-scroll {
+    display: inline-block;
+    padding-left: 100%;
+    animation: ticker-scroll 60s linear infinite;
+}
+
+.ticker-scroll:hover {
+    animation-play-state: paused;
+}
+
+@keyframes ticker-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
+.ticker-item {
+    display: inline-block;
+    padding: 0 30px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.ticker-item::before {
+    content: '//';
+    color: var(--accent-cyan);
+    margin-right: 8px;
+}
+
+.ticker-item.alert {
+    color: var(--accent-red);
+    animation: blink 1s ease-in-out infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Adjust dashboard for ticker */
+body.has-ticker .dashboard {
+    padding-top: 30px;
+    height: calc(100vh - 28px);
+}
+
+/* Neon Glow Panels */
+.panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    opacity: 0.5;
+}
+
+.panel:hover {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 15px rgba(0, 204, 204, 0.2), inset 0 0 30px rgba(0, 204, 204, 0.05);
+}
+
+/* Glitch Effect on Headers */
+.panel-header {
+    background: var(--bg-header);
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.panel-title {
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-secondary);
+    text-shadow: 0 0 5px rgba(255,255,255,0.3);
+}
+
+.glitch {
+    animation: glitch 3s infinite;
+}
+
+@keyframes glitch {
+    0%, 90%, 100% { transform: translate(0); }
+    91% { transform: translate(-2px, 1px); filter: hue-rotate(90deg); }
+    92% { transform: translate(2px, -1px); }
+    93% { transform: translate(-1px, -1px); filter: hue-rotate(-90deg); }
+    94% { transform: translate(0); }
+}
+
+/* Pulsing Status Indicators */
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+}
+
+.status-dot.online {
+    background: var(--aqi-green);
+    box-shadow: 0 0 8px var(--aqi-green);
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.status-dot.warning {
+    background: var(--accent-orange);
+    box-shadow: 0 0 8px var(--accent-orange);
+    animation: pulse-dot 1s ease-in-out infinite;
+}
+
+.status-dot.offline {
+    background: var(--accent-red);
+    box-shadow: 0 0 8px var(--accent-red);
+    animation: pulse-dot 0.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+/* Emergency Panel Styling */
+.panel-emergency .panel-header {
+    background: linear-gradient(90deg, #1a0000, #2a0000, #1a0000);
+    border-bottom-color: var(--accent-red);
+}
+
+.panel-emergency {
+    border-color: rgba(255, 51, 51, 0.3);
+}
+
+.panel-emergency:hover {
+    border-color: var(--accent-red);
+    box-shadow: 0 0 20px rgba(255, 51, 51, 0.3);
+}
+
+.emergency-item {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.emergency-item:last-child {
+    border-bottom: none;
+}
+
+.emergency-type {
+    font-size: 9px;
+    padding: 2px 5px;
+    border-radius: 2px;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.emergency-type.fire {
+    background: var(--accent-red);
+    color: white;
+}
+
+.emergency-type.ambulance {
+    background: var(--accent-orange);
+    color: white;
+}
+
+.emergency-type.police {
+    background: var(--accent-blue);
+    color: white;
+}
+
+.emergency-text {
+    font-size: 10px;
+    color: var(--text-secondary);
+    flex: 1;
+}
+
+.emergency-time {
+    font-size: 9px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+/* Camera Panel */
+.camera-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+}
+
+.camera-feed {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.camera-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8));
+    padding: 8px;
+}
+
+.camera-name {
+    font-size: 10px;
+    color: var(--text-secondary);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
+
+.camera-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0,0,0,0.5);
+    border: none;
+    color: white;
+    padding: 10px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.camera-nav:hover {
+    background: rgba(0, 204, 204, 0.5);
+}
+
+.camera-nav.prev { left: 5px; }
+.camera-nav.next { right: 5px; }
+
+/* Map Panel (spans 2 columns) */
+.panel-map {
+    grid-column: span 2;
+    grid-row: span 2;
+}
+
+.map-container {
+    width: 100%;
+    height: 100%;
+    background: #0a0a0a;
+}
+
+/* Flight Panel */
+.flight-item {
+    display: grid;
+    grid-template-columns: 60px 1fr 50px 60px;
+    gap: 6px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border-color);
+    align-items: center;
+    font-size: 10px;
+}
+
+.flight-item:last-child {
+    border-bottom: none;
+}
+
+.flight-code {
+    font-weight: bold;
+    color: var(--accent-yellow);
+}
+
+.flight-dest {
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.flight-time {
+    color: var(--text-primary);
+    text-align: right;
+}
+
+.flight-status {
+    font-size: 8px;
+    padding: 2px 4px;
+    border-radius: 2px;
+    text-align: center;
+}
+
+.flight-status.on-time {
+    background: var(--aqi-green);
+    color: black;
+}
+
+.flight-status.delayed {
+    background: var(--accent-red);
+    color: white;
+    animation: pulse-bg 1.5s ease-in-out infinite;
+}
+
+.flight-status.boarding {
+    background: var(--accent-orange);
+    color: white;
+}
+
+/* Data freshness indicator */
+.freshness {
+    font-size: 8px;
+    color: var(--text-dim);
+    position: absolute;
+    bottom: 2px;
+    right: 5px;
+}
+
+.freshness.stale {
+    color: var(--accent-red);
+}
+
+/* Animated counters */
+.counter {
+    font-variant-numeric: tabular-nums;
+    transition: all 0.3s ease;
+}
+
+/* 6x3 Grid Layout */
+.dashboard.grid-6x3 {
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+}
+
+/* Badge variations */
+.panel-badge.emergency {
+    background: var(--accent-red);
+    animation: pulse-bg 1s ease-in-out infinite;
+}
+
+.panel-badge.camera {
+    background: var(--accent-magenta);
+}
+
+.panel-badge.flight {
+    background: var(--accent-yellow);
+    color: black;
+}
+
+/* Emergency icon markers */
+.emergency-div-icon {
+    background: transparent !important;
+    border: none !important;
+}
+
+.emergency-icon {
+    font-size: 22px;
+    text-align: center;
+    line-height: 28px;
+    filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8));
+    animation: emergency-bounce 1s ease-in-out infinite;
+}
+
+.emergency-icon.fire {
+    animation: emergency-pulse-fire 1.5s ease-in-out infinite;
+}
+
+.emergency-icon.ambulance {
+    animation: emergency-pulse-ambu 1.5s ease-in-out infinite;
+}
+
+.emergency-icon.police {
+    animation: emergency-pulse-police 1.5s ease-in-out infinite;
+}
+
+@keyframes emergency-pulse-fire {
+    0%, 100% {
+        filter: drop-shadow(0 0 4px #ff0000) drop-shadow(0 0 8px #ff0000);
+        transform: scale(1);
+    }
+    50% {
+        filter: drop-shadow(0 0 8px #ff0000) drop-shadow(0 0 16px #ff0000);
+        transform: scale(1.15);
+    }
+}
+
+@keyframes emergency-pulse-ambu {
+    0%, 100% {
+        filter: drop-shadow(0 0 4px #ff9900) drop-shadow(0 0 8px #ff9900);
+        transform: scale(1);
+    }
+    50% {
+        filter: drop-shadow(0 0 8px #ff9900) drop-shadow(0 0 16px #ff9900);
+        transform: scale(1.15);
+    }
+}
+
+@keyframes emergency-pulse-police {
+    0%, 100% {
+        filter: drop-shadow(0 0 4px #0066ff) drop-shadow(0 0 8px #0066ff);
+        transform: scale(1);
+    }
+    50% {
+        filter: drop-shadow(0 0 8px #0066ff) drop-shadow(0 0 16px #0066ff);
+        transform: scale(1.15);
+    }
+}
+
+/* Map legend */
+.map-legend {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 9px;
+    z-index: 1000;
+    border: 1px solid var(--border-color);
+}
+
+.map-legend-item {
+    display: flex;
+    align-items: center;
+    margin: 3px 0;
+}
+
+.map-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+}
+
+/* Leaflet popup styling */
+.leaflet-popup-content-wrapper {
+    background: rgba(17, 17, 17, 0.95);
+    color: var(--text-secondary);
+    border: 1px solid var(--accent-cyan);
+    border-radius: 4px;
+}
+
+.leaflet-popup-tip {
+    background: rgba(17, 17, 17, 0.95);
+    border: 1px solid var(--accent-cyan);
+}
+
+.leaflet-popup-content {
+    margin: 8px 10px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 11px;
+}

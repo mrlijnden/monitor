@@ -1,0 +1,95 @@
+<div class="camera-container" id="camera-viewer">
+    {% if cameras and cameras.cameras %}
+    {% set cam = cameras.cameras[0] %}
+
+    {% if cam.type == 'youtube' %}
+    <iframe
+        id="camera-frame"
+        src="{{ cam.embed }}"
+        class="camera-feed"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen
+        style="width: 100%; height: 100%; border: none;">
+    </iframe>
+    {% else %}
+    <img src="{{ cam.image }}?t={{ range(1000000) | random }}" alt="{{ cam.name }}" class="camera-feed" id="camera-img">
+    {% endif %}
+
+    <div class="camera-overlay">
+        <div class="camera-name" id="camera-name">
+            <span class="status-dot online"></span>
+            {{ cam.name }} - {{ cam.location }}
+            <span style="float: right; font-size: 8px; color: #ff0000;">● LIVE</span>
+        </div>
+    </div>
+    <button class="camera-nav prev" onclick="prevCamera()">&lt;</button>
+    <button class="camera-nav next" onclick="nextCamera()">&gt;</button>
+    {% else %}
+    <div class="info-message">No cameras available</div>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    const cameras = {{ cameras.cameras | tojson | safe }};
+    let currentIndex = 0;
+
+    window.nextCamera = function() {
+        currentIndex = (currentIndex + 1) % cameras.length;
+        updateCamera();
+    };
+
+    window.prevCamera = function() {
+        currentIndex = (currentIndex - 1 + cameras.length) % cameras.length;
+        updateCamera();
+    };
+
+    function updateCamera() {
+        const cam = cameras[currentIndex];
+        const container = document.getElementById('camera-viewer');
+        const name = document.getElementById('camera-name');
+
+        // Update name
+        if (name) {
+            name.innerHTML = '<span class="status-dot online"></span>' +
+                cam.name + ' - ' + cam.location +
+                '<span style="float: right; font-size: 8px; color: #ff0000;">● LIVE</span>';
+        }
+
+        // Update video/image
+        if (cam.type === 'youtube' && cam.embed) {
+            let frame = document.getElementById('camera-frame');
+            if (!frame) {
+                // Create iframe if it doesn't exist
+                const img = document.getElementById('camera-img');
+                if (img) img.remove();
+                frame = document.createElement('iframe');
+                frame.id = 'camera-frame';
+                frame.className = 'camera-feed';
+                frame.style = 'width: 100%; height: 100%; border: none;';
+                frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+                frame.allowFullscreen = true;
+                container.insertBefore(frame, container.querySelector('.camera-overlay'));
+            }
+            frame.src = cam.embed;
+        } else if (cam.image) {
+            let img = document.getElementById('camera-img');
+            if (!img) {
+                const frame = document.getElementById('camera-frame');
+                if (frame) frame.remove();
+                img = document.createElement('img');
+                img.id = 'camera-img';
+                img.className = 'camera-feed';
+                container.insertBefore(img, container.querySelector('.camera-overlay'));
+            }
+            img.src = cam.image + '?t=' + Date.now();
+        }
+    }
+
+    // Auto-rotate every 30 seconds
+    if (cameras.length > 1) {
+        setInterval(window.nextCamera, 30000);
+    }
+})();
+</script>

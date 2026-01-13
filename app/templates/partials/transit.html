@@ -1,0 +1,17 @@
+{% if transit.departures %}
+{% for dep in transit.departures %}
+<div class="transit-item">
+    <div class="transit-line">{{ dep.line }}</div>
+    <div class="transit-destination">{{ dep.destination }}</div>
+    <div class="transit-time {% if dep.minutes <= 3 %}soon{% else %}normal{% endif %}">
+        {% if dep.minutes == 0 %}
+        NOW
+        {% else %}
+        {{ dep.minutes }} min
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="info-message">No departures available</div>
+{% endif %}

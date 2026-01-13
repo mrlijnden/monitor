@@ -1,0 +1,9 @@
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+httpx>=0.26.0
+feedparser>=6.0.10
+apscheduler>=3.10.4
+jinja2>=3.1.2
+sse-starlette>=1.8.2
+python-dotenv>=1.0.0
+yfinance>=0.2.0

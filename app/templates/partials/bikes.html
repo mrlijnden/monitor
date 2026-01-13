@@ -1,0 +1,43 @@
+{% if bikes.score is not none %}
+<div class="bike-main">
+    <div class="bike-score {% if bikes.color == 'green' %}excellent{% elif bikes.color == 'yellow' %}good{% elif bikes.color == 'orange' %}fair{% else %}poor{% endif %}">
+        {{ bikes.score }}
+    </div>
+    <div class="bike-info">
+        <div class="bike-condition">{{ bikes.condition }}</div>
+        <div class="bike-tip">{{ bikes.tip }}</div>
+    </div>
+</div>
+
+<div class="bike-current">
+    <div class="bike-stat">
+        <span class="stat-label">Temp</span>
+        <span class="stat-value">{{ bikes.current.temperature | round | int }}°C</span>
+    </div>
+    <div class="bike-stat">
+        <span class="stat-label">Wind</span>
+        <span class="stat-value">{{ bikes.current.wind_speed | round | int }} km/h</span>
+    </div>
+    <div class="bike-stat">
+        <span class="stat-label">Rain</span>
+        <span class="stat-value">{{ bikes.current.precipitation }} mm</span>
+    </div>
+</div>
+
+{% if bikes.forecast %}
+<div class="bike-forecast">
+    {% for hour in bikes.forecast %}
+    <div class="forecast-hour">
+        <span class="hour-time">{{ hour.time }}</span>
+        <span class="hour-temp">{{ hour.temp | round | int }}°</span>
+        {% if hour.rain_prob %}
+        <span class="hour-rain {% if hour.rain_prob > 50 %}high{% endif %}">{{ hour.rain_prob }}%</span>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="info-message">{{ bikes.condition or 'Cycling data unavailable' }}</div>
+{% endif %}

@@ -1,0 +1,10 @@
+{% if ticker and ticker.headlines %}
+{% for item in ticker.headlines %}
+<span class="ticker-item{% if item.alert %} alert{% endif %}">
+    {{ item.text }}
+    <span style="color: var(--accent-orange); font-size: 9px;">[{{ item.source }}]</span>
+</span>
+{% endfor %}
+{% else %}
+<span class="ticker-item">Amsterdam Situation Monitor - All systems operational - Data refreshes automatically</span>
+{% endif %}

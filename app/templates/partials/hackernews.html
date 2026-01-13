@@ -1,0 +1,16 @@
+{% if hackernews.stories %}
+{% for story in hackernews.stories %}
+<div class="news-item">
+    <div class="news-title">
+        <a href="{{ story.url }}" target="_blank">{{ story.title }}</a>
+    </div>
+    <div class="news-meta">
+        <span class="hn-score">{{ story.score }} pts</span>
+        · <a href="{{ story.hn_url }}" target="_blank" class="hn-comments">{{ story.comments }} comments</a>
+        · {{ story.by }}
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="info-message">No stories available</div>
+{% endif %}

@@ -1,0 +1,53 @@
+{% if markets.stocks %}
+<div class="markets-section">
+    <div class="section-title">Indices</div>
+    {% for symbol, data in markets.stocks.items() %}
+    <div class="market-item">
+        <div class="market-symbol">{{ symbol }}</div>
+        <div class="market-price">
+            {% if data.price %}
+            {{ "%.2f" | format(data.price) }}
+            {% else %}
+            --
+            {% endif %}
+        </div>
+        <div class="market-change {% if data.change_pct and data.change_pct >= 0 %}positive{% else %}negative{% endif %}">
+            {% if data.change_pct %}
+            {{ "%+.2f" | format(data.change_pct) }}%
+            {% else %}
+            --
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if markets.crypto %}
+<div class="markets-section">
+    <div class="section-title">Crypto</div>
+    {% for symbol, data in markets.crypto.items() %}
+    <div class="market-item">
+        <div class="market-symbol">{{ symbol[:4] }}</div>
+        <div class="market-price">
+            {% if data.eur %}
+            €{{ "%.0f" | format(data.eur) if data.eur > 100 else "%.2f" | format(data.eur) }}
+            {% else %}
+            --
+            {% endif %}
+        </div>
+        <div class="market-change {% if data.change_24h and data.change_24h >= 0 %}positive{% else %}negative{% endif %}">
+            {% if data.change_24h %}
+            {{ "%+.1f" | format(data.change_24h) }}%
+            {% else %}
+            --
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not markets.stocks and not markets.crypto %}
+<div class="info-message">Market data unavailable</div>
+{% endif %}

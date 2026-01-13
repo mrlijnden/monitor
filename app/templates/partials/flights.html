@@ -1,0 +1,26 @@
+{% if flights %}
+<div class="section-title">DEPARTURES</div>
+{% for flight in flights.departures[:6] %}
+<div class="flight-item">
+    <span class="flight-code">{{ flight.code }}</span>
+    <span class="flight-dest">{{ flight.destination }} ({{ flight.airport_code }})</span>
+    <span class="flight-time">{{ flight.time }}</span>
+    <span class="flight-status {{ flight.status }}">
+        {% if flight.status == 'delayed' %}
+            +{{ flight.delay }}m
+        {% elif flight.status == 'on-time' %}
+            ON TIME
+        {% elif flight.status == 'boarding' %}
+            BOARD
+        {% elif flight.status == 'departed' %}
+            DEP
+        {% else %}
+            {{ flight.status|upper }}
+        {% endif %}
+    </span>
+</div>
+{% endfor %}
+<div class="freshness">RWY: {{ flights.runway }} | {{ flights.updated }}</div>
+{% else %}
+<div class="info-message">Loading Schiphol data...</div>
+{% endif %}

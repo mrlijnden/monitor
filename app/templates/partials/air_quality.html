@@ -1,0 +1,27 @@
+{% if air_quality.aqi is not none %}
+<div class="aqi-main">
+    <div class="aqi-value {% if air_quality.aqi <= 50 %}good{% elif air_quality.aqi <= 100 %}moderate{% elif air_quality.aqi <= 150 %}unhealthy-sensitive{% elif air_quality.aqi <= 200 %}unhealthy{% elif air_quality.aqi <= 300 %}very-unhealthy{% else %}hazardous{% endif %}">
+        {{ air_quality.aqi }}
+    </div>
+    <div>
+        <div class="aqi-level">{{ air_quality.level }}</div>
+        {% if air_quality.station %}
+        <div class="aqi-station">{{ air_quality.station }}</div>
+        {% endif %}
+    </div>
+</div>
+
+{% if air_quality.pollutants %}
+<div class="pollutants">
+    {% for name, value in air_quality.pollutants.items() %}
+    <div class="pollutant">
+        <div class="pollutant-name">{{ name }}</div>
+        <div class="pollutant-value">{{ value | round | int }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="info-message">{{ air_quality.level or 'Air quality data unavailable' }}</div>
+{% endif %}
