@@ -6,10 +6,14 @@ import re
 from typing import Optional
 from app.config import amsterdam_now, AMSTERDAM_TZ
 
-# P2000 feed sources (public RSS feeds)
-P2000_FEEDS = [
-    "https://feeds.p2000-online.net/p2000.xml",
-    "https://www.p2000-online.net/p2000.xml"
+# P2000 data sources
+# Use the Python script endpoint that returns HTML table
+P2000_URL = "https://www.p2000-online.net/p2000.py?adamal=1&aantal=50"  # Amsterdam-Amstelland, 50 items
+P2000_RSS_FEEDS = [
+    "https://feeds.p2000-online.net/p2000.xml",  # RSS feed (if available)
+    # Alternative RSS feeds:
+    # "https://112-nu.nl/rss.php?regio=noord-holland",
+    # "https://alarmeringen.nl/webfeeds/rss.php?regio=noord-holland",
 ]
 
 # Amsterdam region codes
@@ -18,37 +22,105 @@ AMSTERDAM_REGIONS = ["Amsterdam", "Amstelland", "Zaanstreek", "Noord-Holland"]
 async def get_emergency_data() -> dict:
     """Fetch P2000 emergency data for Amsterdam region"""
     incidents = []
+    is_live_data = False
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            # Try to fetch from p2000 feed
-            for feed_url in P2000_FEEDS:
-                try:
-                    response = await client.get(feed_url)
-                    if response.status_code == 200:
-                        # Parse the XML/RSS feed
-                        incidents = parse_p2000_feed(response.text)
-                        break
-                except Exception:
-                    continue
-
-            # If no feed worked, generate sample data
+            # First try HTML scraping (main source)
+            try:
+                response = await client.get(P2000_URL, headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                })
+                if response.status_code == 200:
+                    parsed_incidents = parse_p2000_html(response.text)
+                    if parsed_incidents:
+                        incidents = parsed_incidents
+                        is_live_data = True
+            except Exception as e:
+                print(f"Error fetching P2000 HTML {P2000_URL}: {e}")
+            
+            # If HTML didn't work, try RSS feeds as fallback
             if not incidents:
-                incidents = generate_sample_incidents()
+                for feed_url in P2000_RSS_FEEDS:
+                    try:
+                        response = await client.get(feed_url)
+                        if response.status_code == 200:
+                            # Check if response is actually RSS/XML (not HTML error page)
+                            content_type = response.headers.get('content-type', '').lower()
+                            if 'xml' in content_type or response.text.strip().startswith('<?xml') or '<rss' in response.text.lower() or '<feed' in response.text.lower():
+                                # Parse the XML/RSS feed
+                                parsed_incidents = parse_p2000_feed(response.text)
+                                if parsed_incidents:
+                                    incidents = parsed_incidents
+                                    is_live_data = True
+                                    break
+                    except Exception as e:
+                        print(f"Error fetching RSS feed {feed_url}: {e}")
+                        continue
 
     except Exception as e:
         print(f"Error fetching P2000 data: {e}")
-        incidents = generate_sample_incidents()
 
     return {
         "incidents": incidents[:25],  # Latest 25 incidents
         "updated": amsterdam_now().strftime("%H:%M:%S"),
-        "status": "live" if incidents else "simulated"
+        "status": "live" if is_live_data else "simulated"
     }
+
+def parse_p2000_html(html_content: str) -> list:
+    """Parse P2000 HTML page with table structure"""
+    incidents = []
+    
+    if not html_content or '<table' not in html_content.lower():
+        return incidents
+    
+    # Find all table rows with incident data
+    # Pattern: <tr><td class="DT">date time</td><td class="Po|Am|Br">type</td><td class="Regio">region</td><td class="Md">message</td></tr>
+    row_pattern = r'<tr><td class="DT">([^<]+)</td><td class="(Po|Am|Br)">([^<]+)</td><td class="Regio">([^<]+)</td><td class="Md">([^<]+)</td></tr>'
+    matches = re.findall(row_pattern, html_content, re.IGNORECASE)
+    
+    for match in matches[:50]:  # Limit to 50 incidents
+        date_time_str, type_class, type_name, region, message = match
+        
+        # Parse date/time
+        # Format: "13-01-2026 17:19:17"
+        time_str = amsterdam_now().strftime("%H:%M")
+        try:
+            dt_match = re.search(r'(\d{1,2}):(\d{2}):(\d{2})', date_time_str)
+            if dt_match:
+                time_str = f"{dt_match.group(1)}:{dt_match.group(2)}"
+        except:
+            pass
+        
+        # Determine incident type from class
+        if type_class.lower() == 'br':
+            incident_type = 'fire'
+        elif type_class.lower() == 'am':
+            incident_type = 'ambulance'
+        elif type_class.lower() == 'po':
+            incident_type = 'police'
+        else:
+            incident_type = classify_incident(message)
+        
+        # Extract location from message
+        location = extract_location(message) or region or "Amsterdam"
+        
+        incidents.append({
+            "type": incident_type,
+            "text": clean_text(message),
+            "location": location,
+            "time": time_str
+        })
+    
+    return incidents
 
 def parse_p2000_feed(xml_content: str) -> list:
     """Parse P2000 RSS/XML feed"""
     incidents = []
+    
+    # Check if content is actually XML/RSS (not HTML error page)
+    if not xml_content or '<html' in xml_content.lower() or '404' in xml_content or 'not found' in xml_content.lower():
+        return incidents
 
     # Simple regex parsing for RSS items
     items = re.findall(r'<item>(.*?)</item>', xml_content, re.DOTALL)
@@ -149,205 +221,3 @@ def parse_time(date_str: Optional[str]) -> str:
         pass
 
     return amsterdam_now().strftime("%H:%M")
-
-def generate_sample_incidents() -> list:
-    """Generate realistic sample incidents for demo with coordinates"""
-    now = amsterdam_now()
-    import random
-
-    # Amsterdam locations with coordinates
-    locations = [
-        {"name": "Damrak", "area": "Centrum", "lat": 52.3738, "lng": 4.8936},
-        {"name": "Kinkerstraat", "area": "West", "lat": 52.3688, "lng": 4.8695},
-        {"name": "Albert Cuypstraat", "area": "De Pijp", "lat": 52.3559, "lng": 4.8951},
-        {"name": "Overtoom", "area": "Oud-West", "lat": 52.3621, "lng": 4.8721},
-        {"name": "Wibautstraat", "area": "Oost", "lat": 52.3541, "lng": 4.9127},
-        {"name": "Museumplein", "area": "Zuid", "lat": 52.3573, "lng": 4.8793},
-        {"name": "Leidseplein", "area": "Centrum", "lat": 52.3641, "lng": 4.8828},
-        {"name": "Waterlooplein", "area": "Centrum", "lat": 52.3678, "lng": 4.9012},
-        {"name": "Ferdinand Bolstraat", "area": "De Pijp", "lat": 52.3512, "lng": 4.8932},
-        {"name": "Rozengracht", "area": "Jordaan", "lat": 52.3725, "lng": 4.8782},
-        {"name": "Amstelveenseweg", "area": "Zuid", "lat": 52.3445, "lng": 4.8612},
-        {"name": "Middenweg", "area": "Oost", "lat": 52.3521, "lng": 4.9321},
-        {"name": "Nieuwmarkt", "area": "Centrum", "lat": 52.3720, "lng": 4.9010},
-        {"name": "Jordaan", "area": "Jordaan", "lat": 52.3770, "lng": 4.8750},
-        {"name": "Oosterpark", "area": "Oost", "lat": 52.3600, "lng": 4.9200},
-        {"name": "Vondelpark", "area": "Zuid", "lat": 52.3664, "lng": 4.8795},
-        {"name": "Westerpark", "area": "West", "lat": 52.3860, "lng": 4.8800},
-        {"name": "Rembrandtplein", "area": "Centrum", "lat": 52.3667, "lng": 4.8950},
-        {"name": "Spui", "area": "Centrum", "lat": 52.3690, "lng": 4.8880},
-        {"name": "Utrechtsestraat", "area": "Centrum", "lat": 52.3650, "lng": 4.8900},
-    ]
-
-    incidents = [
-        {
-            "type": "ambulance",
-            "text": "A1 Spoed - Reanimatie Damrak ter hoogte van nr 42",
-            "location": "Centrum",
-            "lat": 52.3738 + random.uniform(-0.002, 0.002),
-            "lng": 4.8936 + random.uniform(-0.002, 0.002),
-            "time": now.strftime("%H:%M")
-        },
-        {
-            "type": "fire",
-            "text": "P1 Brand - Melding rookontwikkeling Kinkerstraat",
-            "location": "West",
-            "lat": 52.3688 + random.uniform(-0.002, 0.002),
-            "lng": 4.8695 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-3))).strftime("%H:%M")
-        },
-        {
-            "type": "police",
-            "text": "Prio 1 - Melding overval Albert Cuypstraat",
-            "location": "De Pijp",
-            "lat": 52.3559 + random.uniform(-0.002, 0.002),
-            "lng": 4.8951 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-7))).strftime("%H:%M")
-        },
-        {
-            "type": "ambulance",
-            "text": "A2 - Ongeval letsel Overtoom / Eerste Const. Huygensstr",
-            "location": "Oud-West",
-            "lat": 52.3621 + random.uniform(-0.002, 0.002),
-            "lng": 4.8721 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-12))).strftime("%H:%M")
-        },
-        {
-            "type": "fire",
-            "text": "P2 Brand - Containerbrand Wibautstraat",
-            "location": "Oost",
-            "lat": 52.3541 + random.uniform(-0.002, 0.002),
-            "lng": 4.9127 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-18))).strftime("%H:%M")
-        },
-        {
-            "type": "ambulance",
-            "text": "A1 - Val van hoogte Museumplein",
-            "location": "Zuid",
-            "lat": 52.3573 + random.uniform(-0.002, 0.002),
-            "lng": 4.8793 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-25))).strftime("%H:%M")
-        },
-        {
-            "type": "police",
-            "text": "Prio 2 - Vechtpartij Leidseplein",
-            "location": "Centrum",
-            "lat": 52.3641 + random.uniform(-0.002, 0.002),
-            "lng": 4.8828 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-32))).strftime("%H:%M")
-        },
-        {
-            "type": "ambulance",
-            "text": "A2 - Ongeluk met letsel Nieuwmarkt",
-            "location": "Centrum",
-            "lat": 52.3720 + random.uniform(-0.002, 0.002),
-            "lng": 4.9010 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-40))).strftime("%H:%M")
-        },
-        {
-            "type": "fire",
-            "text": "P1 Brand - Keukenbrand Jordaan",
-            "location": "Jordaan",
-            "lat": 52.3770 + random.uniform(-0.002, 0.002),
-            "lng": 4.8750 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-45))).strftime("%H:%M")
-        },
-        {
-            "type": "police",
-            "text": "Prio 1 - Inbraak Oosterpark",
-            "location": "Oost",
-            "lat": 52.3600 + random.uniform(-0.002, 0.002),
-            "lng": 4.9200 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-50))).strftime("%H:%M")
-        },
-        {
-            "type": "ambulance",
-            "text": "A1 Spoed - Val Vondelpark",
-            "location": "Zuid",
-            "lat": 52.3664 + random.uniform(-0.002, 0.002),
-            "lng": 4.8795 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-55))).strftime("%H:%M")
-        },
-        {
-            "type": "fire",
-            "text": "P2 Brand - Afvalcontainer Westerpark",
-            "location": "West",
-            "lat": 52.3860 + random.uniform(-0.002, 0.002),
-            "lng": 4.8800 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-60))).strftime("%H:%M")
-        },
-        {
-            "type": "police",
-            "text": "Prio 2 - Overlast Rembrandtplein",
-            "location": "Centrum",
-            "lat": 52.3667 + random.uniform(-0.002, 0.002),
-            "lng": 4.8950 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-65))).strftime("%H:%M")
-        },
-        {
-            "type": "ambulance",
-            "text": "A2 - Medische hulp Spui",
-            "location": "Centrum",
-            "lat": 52.3690 + random.uniform(-0.002, 0.002),
-            "lng": 4.8880 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-70))).strftime("%H:%M")
-        },
-        {
-            "type": "fire",
-            "text": "P1 Brand - Rookmelding Utrechtsestraat",
-            "location": "Centrum",
-            "lat": 52.3650 + random.uniform(-0.002, 0.002),
-            "lng": 4.8900 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-75))).strftime("%H:%M")
-        },
-        {
-            "type": "police",
-            "text": "Prio 1 - Vermissing Centrum",
-            "location": "Centrum",
-            "lat": 52.3738 + random.uniform(-0.002, 0.002),
-            "lng": 4.8936 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-80))).strftime("%H:%M")
-        },
-        {
-            "type": "ambulance",
-            "text": "A1 Spoed - Reanimatie Kinkerstraat",
-            "location": "West",
-            "lat": 52.3688 + random.uniform(-0.002, 0.002),
-            "lng": 4.8695 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-85))).strftime("%H:%M")
-        },
-        {
-            "type": "fire",
-            "text": "P2 Brand - Schoorsteenbrand De Pijp",
-            "location": "De Pijp",
-            "lat": 52.3559 + random.uniform(-0.002, 0.002),
-            "lng": 4.8951 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-90))).strftime("%H:%M")
-        },
-        {
-            "type": "police",
-            "text": "Prio 2 - Verkeersongeval Oud-West",
-            "location": "Oud-West",
-            "lat": 52.3621 + random.uniform(-0.002, 0.002),
-            "lng": 4.8721 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-95))).strftime("%H:%M")
-        },
-        {
-            "type": "ambulance",
-            "text": "A2 - Ongeval met fietser Oost",
-            "location": "Oost",
-            "lat": 52.3541 + random.uniform(-0.002, 0.002),
-            "lng": 4.9127 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-100))).strftime("%H:%M")
-        },
-        {
-            "type": "fire",
-            "text": "P1 Brand - Appartement Zuid",
-            "location": "Zuid",
-            "lat": 52.3573 + random.uniform(-0.002, 0.002),
-            "lng": 4.8793 + random.uniform(-0.002, 0.002),
-            "time": (now.replace(minute=max(0, now.minute-105))).strftime("%H:%M")
-        }
-    ]
-
-    return incidents

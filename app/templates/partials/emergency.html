@@ -11,8 +11,14 @@
 <div class="freshness">Updated: {{ emergency.updated }} | {{ emergency.status|upper }}</div>
 {% else %}
 <div class="info-message">
+    {% if emergency.status == "simulated" %}
+    <span class="status-dot" style="background: #ff6600;"></span>
+    P2000 feed unavailable<br>
+    <small style="color: var(--text-dim);">Unable to fetch live emergency data</small>
+    {% else %}
     <span class="status-dot online"></span>
     Scanning P2000 frequencies...<br>
     <small style="color: var(--text-dim);">No incidents in Amsterdam region</small>
+    {% endif %}
 </div>
 {% endif %}

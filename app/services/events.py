@@ -9,11 +9,9 @@ async def fetch_events() -> dict:
     events = []
 
     if not TICKETMASTER_API_KEY:
-        # Return sample data if no API key
+        # Return empty if no API key (no sample data)
         return {
-            "events": [
-                {"name": "Configure TICKETMASTER_API_KEY for events", "date": "", "venue": "", "category": "info"}
-            ],
+            "events": [],
             "updated_at": amsterdam_now().isoformat(),
         }
 
