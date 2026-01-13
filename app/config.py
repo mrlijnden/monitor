@@ -44,6 +44,7 @@ REFRESH_INTERVALS = {
     "markets": 120,       # 2 minutes
     "parking": 300,       # 5 minutes
     "bikes": 900,         # 15 minutes
+    "flights": 120,       # 2 minutes
 }
 
 # Cache TTL (slightly longer than refresh to handle delays)
@@ -58,4 +59,5 @@ CACHE_TTL = {
     "markets": 150,
     "parking": 350,
     "bikes": 1000,
+    "flights": 150,
 }

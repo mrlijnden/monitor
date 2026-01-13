@@ -1,5 +1,6 @@
 """P2000 Emergency Scanner Service - Scrapes Dutch emergency services feed"""
 import httpx
+import asyncio
 from datetime import datetime
 from zoneinfo import ZoneInfo
 import re
@@ -64,20 +65,31 @@ async def get_emergency_data() -> dict:
     except Exception as e:
         print(f"Error fetching P2000 data: {e}")
 
-    # Geocode locations for mapping (async, but don't block)
-    # We'll geocode a subset to avoid rate limits
-    geocoded_incidents = []
-    for incident in incidents[:25]:
-        if incident.get("location") and incident["location"] != "Amsterdam":
-            # Try to geocode (non-blocking, will add coords if successful)
-            coords = await geocode_address(incident["location"])
-            if coords:
-                incident["lat"] = coords[0]
-                incident["lng"] = coords[1]
-        geocoded_incidents.append(incident)
+    # Geocode only top incidents for faster loading
+    # Limit to first 10 incidents to avoid slow API calls
+    # Use parallel geocoding for better performance
+    geocoding_tasks = []
+    incidents_to_geocode = incidents[:10]  # Only geocode top 10
+    
+    for incident in incidents_to_geocode:
+        location = incident.get("location", "")
+        # Only geocode if it's a specific street/address, not generic locations
+        if location and location != "Amsterdam" and any(word in location.lower() for word in ["straat", "weg", "laan", "plein", "kade", "gracht"]):
+            geocoding_tasks.append((incident, geocode_address(location)))
+    
+    # Run geocoding in parallel (but limit concurrent requests)
+    if geocoding_tasks:
+        # Process in batches of 3 to respect rate limits
+        for i in range(0, len(geocoding_tasks), 3):
+            batch = geocoding_tasks[i:i+3]
+            results = await asyncio.gather(*[task[1] for task in batch], return_exceptions=True)
+            for (incident, _), coords in zip(batch, results):
+                if coords and not isinstance(coords, Exception):
+                    incident["lat"] = coords[0]
+                    incident["lng"] = coords[1]
     
     return {
-        "incidents": geocoded_incidents,
+        "incidents": incidents[:25],  # Return all incidents, but only top 10 have coords
         "updated": amsterdam_now().strftime("%H:%M:%S"),
         "status": "live" if is_live_data else "simulated"
     }
@@ -232,7 +244,8 @@ async def geocode_address(address: str) -> Optional[Tuple[float, float]]:
         # Add Amsterdam context for better results
         query = f"{address}, Amsterdam, Netherlands"
         
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        # Use shorter timeout for faster failure
+        async with httpx.AsyncClient(timeout=3.0) as client:
             response = await client.get(
                 "https://nominatim.openstreetmap.org/search",
                 params={
@@ -243,7 +256,8 @@ async def geocode_address(address: str) -> Optional[Tuple[float, float]]:
                 },
                 headers={
                     "User-Agent": "AmsterdamMonitor/1.0"  # Required by Nominatim
-                }
+                },
+                follow_redirects=True
             )
             
             if response.status_code == 200:
@@ -254,6 +268,9 @@ async def geocode_address(address: str) -> Optional[Tuple[float, float]]:
                     # Cache the result
                     _geocoding_cache[address] = (lat, lng)
                     return (lat, lng)
+    except (httpx.TimeoutException, httpx.RequestError) as e:
+        # Don't log timeout errors, just return None
+        pass
     except Exception as e:
         print(f"Geocoding error for {address}: {e}")
     

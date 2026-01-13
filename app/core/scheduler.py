@@ -3,7 +3,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from app.config import REFRESH_INTERVALS
 from app.services import weather, news, transit, events, air_quality, markets
-from app.services import hackernews, parking, trains, bikes
+from app.services import hackernews, parking, trains, bikes, flights
 
 scheduler = AsyncIOScheduler()
 
@@ -132,6 +132,12 @@ def setup_scheduler():
         id="bikes",
         replace_existing=True,
     )
+    scheduler.add_job(
+        refresh_flights,
+        IntervalTrigger(seconds=REFRESH_INTERVALS["flights"]),
+        id="flights",
+        replace_existing=True,
+    )
 
     scheduler.start()
 
@@ -149,5 +155,6 @@ async def initial_fetch():
         markets.fetch_markets(),
         parking.fetch_parking(),
         bikes.fetch_bikes(),
+        flights.fetch_flights(),
         return_exceptions=True,
     )

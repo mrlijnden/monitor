@@ -1,7 +1,12 @@
 {% if transit.departures %}
 {% for dep in transit.departures %}
 <div class="transit-item">
-    <div class="transit-line">{{ dep.line }}</div>
+    <div class="transit-line">
+        {% if dep.transport_emoji %}{{ dep.transport_emoji }} {% endif %}{{ dep.transport_name }} {{ dep.line }}
+        {% if dep.stop and dep.stop != dep.line and dep.stop != "AmsCS" and dep.stop != "AmsDam" and dep.stop != "AmsLei" %}
+        <small style="color: var(--text-dim); font-size: 8px;">@ {{ dep.stop }}</small>
+        {% endif %}
+    </div>
     <div class="transit-destination">{{ dep.destination }}</div>
     <div class="transit-time {% if dep.minutes <= 3 %}soon{% else %}normal{% endif %}">
         {% if dep.minutes == 0 %}

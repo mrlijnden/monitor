@@ -3,17 +3,31 @@ from datetime import datetime
 from app.config import OVAPI_URL, CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
-# Key Amsterdam stop areas
+# Key Amsterdam stop areas - Major transit hubs and popular stops
+# Using known OVapi stop area codes
 AMSTERDAM_STOPS = [
-    "AmsCS",      # Amsterdam Centraal
+    # Major hubs (confirmed working)
+    "AmsCS",      # Amsterdam Centraal Station
     "AmsDam",     # Dam
     "AmsLei",     # Leidseplein
+    "AmsZd",      # Amsterdam Zuid (WTC)
+    "AssSl",      # Amsterdam Sloterdijk
+    "AmsAm",      # Amstelstation
+    
+    # Additional major stops (will try these)
+    "AmsNie",     # Nieuwmarkt
+    "AmsWib",     # Wibautstraat
+    "AmsMu",      # Museumplein
+    "AmsVij",     # Vijzelgracht
+    "AmsWes",     # Westermarkt
+    "AmsBij",     # Bijlmer Arena
 ]
 
 
 async def fetch_transit() -> dict:
-    """Fetch real-time transit data from OVapi."""
+    """Fetch real-time transit data from OVapi for Amsterdam stops."""
     departures = []
+    successful_stops = []
 
     async with httpx.AsyncClient() as client:
         for stop_code in AMSTERDAM_STOPS:
@@ -56,25 +70,57 @@ async def fetch_transit() -> dict:
                                 if minutes < 0 or minutes > 60:
                                     continue
 
+                                transport_type = pass_data.get("TransportType", "BUS")
+                                
+                                # Map transport types to readable names and emojis
+                                type_map = {
+                                    "BUS": ("Bus", "🚌"),
+                                    "TRAM": ("Tram", "🚊"),
+                                    "METRO": ("Metro", "🚇"),
+                                    "FERRY": ("Veer", "⛴️"),
+                                    "TRAIN": ("Trein", "🚆")
+                                }
+                                transport_info = type_map.get(transport_type, (transport_type, "🚍"))
+                                transport_name, transport_emoji = transport_info
+                                
                                 departures.append({
                                     "line": pass_data.get("LinePublicNumber", "?"),
                                     "destination": pass_data.get("DestinationName50", "Unknown"),
                                     "minutes": minutes,
                                     "stop": pass_data.get("TimingPointName", stop_code),
-                                    "transport_type": pass_data.get("TransportType", "BUS"),
+                                    "transport_type": transport_type,
+                                    "transport_name": transport_name,
+                                    "transport_emoji": transport_emoji,
+                                    "operator": pass_data.get("DataOwnerCode", ""),
                                 })
                             except Exception:
                                 continue
+                    
+                    # Mark this stop as successful if we got data
+                    if any(dep.get("stop") == stop_code or stop_code in str(dep.get("stop", "")) for dep in departures[-10:]):
+                        successful_stops.append(stop_code)
 
-            except Exception:
+            except Exception as e:
+                print(f"Error fetching stop {stop_code}: {e}")
                 continue
 
     # Sort by departure time
     departures.sort(key=lambda x: x["minutes"])
 
+    # Remove duplicates (same line, destination, time)
+    seen = set()
+    unique_departures = []
+    for dep in departures:
+        key = (dep["line"], dep["destination"], dep["minutes"], dep["stop"])
+        if key not in seen:
+            seen.add(key)
+            unique_departures.append(dep)
+    
     result = {
-        "departures": departures[:20],
+        "departures": unique_departures[:30],  # Show more departures
         "updated_at": amsterdam_now().isoformat(),
+        "stops_checked": len(AMSTERDAM_STOPS),
+        "stops_with_data": len(successful_stops),
     }
 
     cache.set("transit", result, CACHE_TTL["transit"])
