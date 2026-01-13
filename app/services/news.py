@@ -1,7 +1,8 @@
 import feedparser
 import httpx
 from datetime import datetime
-from app.config import NEWS_FEEDS, CACHE_TTL, amsterdam_now
+from zoneinfo import ZoneInfo
+from app.config import NEWS_FEEDS, CACHE_TTL, amsterdam_now, AMSTERDAM_TZ
 from app.core.cache import cache
 
 
@@ -17,13 +18,22 @@ async def fetch_news() -> dict:
 
                 for entry in feed.entries[:10]:
                     published = None
+                    published_time = None
                     if hasattr(entry, "published_parsed") and entry.published_parsed:
-                        published = datetime(*entry.published_parsed[:6]).isoformat()
+                        # Parse the published time (feedparser gives UTC time)
+                        pub_tuple = entry.published_parsed[:6]
+                        # Feedparser gives UTC time, convert to Amsterdam timezone
+                        utc_tz = ZoneInfo("UTC")
+                        utc_dt = datetime(*pub_tuple, tzinfo=utc_tz)
+                        ams_dt = utc_dt.astimezone(AMSTERDAM_TZ)
+                        published = ams_dt.isoformat()
+                        published_time = ams_dt.strftime("%H:%M")
 
                     all_articles.append({
                         "title": entry.get("title", "No title"),
                         "link": entry.get("link", ""),
                         "published": published,
+                        "published_time": published_time,
                         "source": feed.feed.get("title", "Unknown"),
                     })
             except Exception:

@@ -6,7 +6,9 @@
     </div>
     <div class="news-meta">
         <span class="news-source">{{ article.source }}</span>
-        {% if article.published %}
+        {% if article.published_time %}
+        · {{ article.published_time }}
+        {% elif article.published %}
         · {{ article.published[11:16] }}
         {% endif %}
     </div>
