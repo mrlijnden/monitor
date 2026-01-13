@@ -3,6 +3,7 @@ import httpx
 from datetime import datetime, timedelta
 import random
 from typing import List, Dict
+from app.config import amsterdam_now
 
 # Schiphol public data endpoint (may require scraping)
 SCHIPHOL_URL = "https://www.schiphol.nl/en/departures/"
@@ -46,14 +47,14 @@ async def get_flights_data() -> Dict:
     return {
         "departures": departures[:8],
         "arrivals": arrivals[:8],
-        "updated": datetime.now().strftime("%H:%M:%S"),
+        "updated": amsterdam_now().strftime("%H:%M:%S"),
         "runway": random.choice(["18R/36L", "18L/36R", "06/24", "09/27"])
     }
 
 def generate_sample_flights(flight_type: str) -> List[Dict]:
     """Generate realistic sample flight data"""
     flights = []
-    now = datetime.now()
+    now = amsterdam_now()
 
     for i in range(12):
         dest = random.choice(DESTINATIONS)
@@ -103,5 +104,5 @@ async def get_flight_status(flight_code: str) -> Dict:
     return {
         "code": flight_code,
         "status": random.choice(STATUSES),
-        "updated": datetime.now().strftime("%H:%M:%S")
+        "updated": amsterdam_now().strftime("%H:%M:%S")
     }

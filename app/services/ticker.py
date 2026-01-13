@@ -3,6 +3,7 @@ import httpx
 import feedparser
 from datetime import datetime
 from typing import List, Dict
+from app.config import amsterdam_now
 
 # News RSS feeds
 NEWS_FEEDS = [
@@ -45,7 +46,7 @@ async def get_ticker_data() -> Dict:
 
     return {
         "headlines": headlines[:15],
-        "updated": datetime.now().strftime("%H:%M:%S")
+        "updated": amsterdam_now().strftime("%H:%M:%S")
     }
 
 def is_alert_headline(text: str) -> bool:

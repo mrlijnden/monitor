@@ -1,7 +1,17 @@
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Amsterdam timezone
+AMSTERDAM_TZ = ZoneInfo("Europe/Amsterdam")
+
+
+def amsterdam_now() -> datetime:
+    """Get current datetime in Amsterdam timezone."""
+    return datetime.now(AMSTERDAM_TZ)
 
 # Amsterdam coordinates
 AMSTERDAM_LAT = 52.3676

@@ -1,7 +1,7 @@
 import httpx
 import yfinance as yf
 from datetime import datetime
-from app.config import COINGECKO_URL, CACHE_TTL
+from app.config import COINGECKO_URL, CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
 
@@ -60,7 +60,7 @@ async def fetch_markets() -> dict:
     result = {
         "crypto": crypto,
         "stocks": stocks,
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": amsterdam_now().isoformat(),
     }
 
     cache.set("markets", result, CACHE_TTL["markets"])

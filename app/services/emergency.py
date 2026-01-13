@@ -3,6 +3,7 @@ import httpx
 from datetime import datetime
 import re
 from typing import Optional
+from app.config import amsterdam_now
 
 # P2000 feed sources (public RSS feeds)
 P2000_FEEDS = [
@@ -40,7 +41,7 @@ async def get_emergency_data() -> dict:
 
     return {
         "incidents": incidents[:10],  # Latest 10 incidents
-        "updated": datetime.now().strftime("%H:%M:%S"),
+        "updated": amsterdam_now().strftime("%H:%M:%S"),
         "status": "live" if incidents else "simulated"
     }
 
@@ -107,7 +108,7 @@ def extract_location(text: str) -> Optional[str]:
 def parse_time(date_str: Optional[str]) -> str:
     """Parse date string to time"""
     if not date_str:
-        return datetime.now().strftime("%H:%M")
+        return amsterdam_now().strftime("%H:%M")
 
     try:
         # Try common RSS date formats
@@ -120,11 +121,11 @@ def parse_time(date_str: Optional[str]) -> str:
     except Exception:
         pass
 
-    return datetime.now().strftime("%H:%M")
+    return amsterdam_now().strftime("%H:%M")
 
 def generate_sample_incidents() -> list:
     """Generate realistic sample incidents for demo with coordinates"""
-    now = datetime.now()
+    now = amsterdam_now()
     import random
 
     # Amsterdam locations with coordinates

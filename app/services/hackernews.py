@@ -1,6 +1,6 @@
 import httpx
 from datetime import datetime
-from app.config import CACHE_TTL
+from app.config import CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
 HN_API_BASE = "https://hacker-news.firebaseio.com/v0"
@@ -50,7 +50,7 @@ async def fetch_hackernews() -> dict:
 
     result = {
         "stories": stories,
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": amsterdam_now().isoformat(),
     }
 
     cache.set("hackernews", result, CACHE_TTL.get("hackernews", 600))

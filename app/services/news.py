@@ -1,7 +1,7 @@
 import feedparser
 import httpx
 from datetime import datetime
-from app.config import NEWS_FEEDS, CACHE_TTL
+from app.config import NEWS_FEEDS, CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
 
@@ -37,7 +37,7 @@ async def fetch_news() -> dict:
 
     result = {
         "articles": all_articles[:15],
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": amsterdam_now().isoformat(),
     }
 
     cache.set("news", result, CACHE_TTL["news"])

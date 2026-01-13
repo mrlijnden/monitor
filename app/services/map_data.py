@@ -3,6 +3,7 @@ import httpx
 from datetime import datetime
 from typing import List, Dict
 import random
+from app.config import amsterdam_now
 
 # OVapi endpoint for real-time vehicle positions
 OVAPI_URL = "https://v0.ovapi.nl/vehicle"
@@ -41,7 +42,7 @@ async def get_transit_positions() -> Dict:
 
     return {
         "vehicles": vehicles[:50],  # Limit to 50 vehicles
-        "updated": datetime.now().strftime("%H:%M:%S"),
+        "updated": amsterdam_now().strftime("%H:%M:%S"),
         "count": len(vehicles)
     }
 

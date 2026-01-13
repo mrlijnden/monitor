@@ -1,6 +1,6 @@
 import httpx
 from datetime import datetime, timedelta
-from app.config import TICKETMASTER_URL, TICKETMASTER_API_KEY, CACHE_TTL
+from app.config import TICKETMASTER_URL, TICKETMASTER_API_KEY, CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
 
@@ -14,7 +14,7 @@ async def fetch_events() -> dict:
             "events": [
                 {"name": "Configure TICKETMASTER_API_KEY for events", "date": "", "venue": "", "category": "info"}
             ],
-            "updated_at": datetime.now().isoformat(),
+            "updated_at": amsterdam_now().isoformat(),
         }
 
     try:

@@ -1,6 +1,6 @@
 import httpx
 from datetime import datetime
-from app.config import CACHE_TTL
+from app.config import CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
 # Using the public OVapi for train departures (same as transit but filtered for trains)
@@ -56,7 +56,7 @@ async def fetch_trains() -> dict:
 
                             try:
                                 exp_time = datetime.fromisoformat(expected.replace("Z", "+00:00"))
-                                now = datetime.now(exp_time.tzinfo)
+                                now = amsterdam_now().astimezone(exp_time.tzinfo)
                                 minutes = int((exp_time - now).total_seconds() / 60)
 
                                 if minutes < 0 or minutes > 90:
@@ -81,7 +81,7 @@ async def fetch_trains() -> dict:
 
     result = {
         "departures": departures[:15],
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": amsterdam_now().isoformat(),
     }
 
     cache.set("trains", result, CACHE_TTL.get("trains", 120))

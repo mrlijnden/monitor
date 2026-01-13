@@ -1,6 +1,6 @@
 import httpx
 from datetime import datetime
-from app.config import AMSTERDAM_LAT, AMSTERDAM_LON, CACHE_TTL
+from app.config import AMSTERDAM_LAT, AMSTERDAM_LON, CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
 # Using weather data to provide cycling conditions
@@ -114,7 +114,7 @@ async def fetch_bikes() -> dict:
                 },
                 "forecast": forecast,
                 "tip": get_cycling_tip(score, temp, wind, precip),
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": amsterdam_now().isoformat(),
             }
 
             cache.set("bikes", result, CACHE_TTL.get("bikes", 900))

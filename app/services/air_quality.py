@@ -1,6 +1,6 @@
 import httpx
 from datetime import datetime
-from app.config import AMSTERDAM_LAT, AMSTERDAM_LON, CACHE_TTL
+from app.config import AMSTERDAM_LAT, AMSTERDAM_LON, CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
 # Open-Meteo Air Quality API (FREE, no key required)
@@ -65,7 +65,7 @@ async def fetch_air_quality() -> dict:
                 "color": color,
                 "pollutants": pollutants,
                 "station": "Amsterdam (Open-Meteo)",
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": amsterdam_now().isoformat(),
             }
 
             cache.set("air_quality", result, CACHE_TTL["air_quality"])

@@ -1,6 +1,6 @@
 import httpx
 from datetime import datetime
-from app.config import CACHE_TTL
+from app.config import CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
 # Note: The original Amsterdam parking API (opd.it-t.nl) is deprecated.
@@ -50,7 +50,7 @@ async def fetch_parking() -> dict:
     result = {
         "garages": garages[:12],
         "source": "sample",  # Indicates using sample data
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": amsterdam_now().isoformat(),
     }
 
     cache.set("parking", result, CACHE_TTL.get("parking", 300))

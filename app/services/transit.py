@@ -1,6 +1,6 @@
 import httpx
 from datetime import datetime
-from app.config import OVAPI_URL, CACHE_TTL
+from app.config import OVAPI_URL, CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
 # Key Amsterdam stop areas
@@ -50,7 +50,7 @@ async def fetch_transit() -> dict:
 
                             try:
                                 exp_time = datetime.fromisoformat(expected.replace("Z", "+00:00"))
-                                now = datetime.now(exp_time.tzinfo)
+                                now = amsterdam_now().astimezone(exp_time.tzinfo)
                                 minutes = int((exp_time - now).total_seconds() / 60)
 
                                 if minutes < 0 or minutes > 60:
@@ -74,7 +74,7 @@ async def fetch_transit() -> dict:
 
     result = {
         "departures": departures[:20],
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": amsterdam_now().isoformat(),
     }
 
     cache.set("transit", result, CACHE_TTL["transit"])
