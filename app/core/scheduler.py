@@ -61,6 +61,11 @@ async def refresh_bikes():
     await notify_clients("bikes")
 
 
+async def refresh_flights():
+    await flights.fetch_flights()
+    await notify_clients("flights")
+
+
 async def notify_clients(panel: str):
     """Notify all SSE clients about an update."""
     for queue in list(sse_clients):
