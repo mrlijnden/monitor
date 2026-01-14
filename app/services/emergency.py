@@ -5,7 +5,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import re
 from typing import Optional, Tuple
-from app.config import amsterdam_now, AMSTERDAM_TZ
+from app.config import amsterdam_now, AMSTERDAM_TZ, CACHE_TTL
+from app.core.cache import cache
 
 # P2000 data sources
 # Use the Python script endpoint that returns HTML table
@@ -23,8 +24,23 @@ AMSTERDAM_REGIONS = ["Amsterdam", "Amstelland", "Zaanstreek", "Noord-Holland"]
 # Geocoding cache to avoid repeated API calls
 _geocoding_cache = {}
 
+async def fetch_emergency() -> dict:
+    """Fetch P2000 emergency data and cache it - called by scheduler"""
+    data = await _fetch_emergency_data()
+    cache.set("emergency", data, CACHE_TTL.get("emergency", 90))
+    return data
+
+
 async def get_emergency_data() -> dict:
-    """Fetch P2000 emergency data for Amsterdam region"""
+    """Get cached emergency data or fetch if not available"""
+    cached = cache.get("emergency")
+    if cached:
+        return cached
+    return await fetch_emergency()
+
+
+async def _fetch_emergency_data() -> dict:
+    """Internal: Fetch P2000 emergency data for Amsterdam region"""
     incidents = []
     is_live_data = False
 

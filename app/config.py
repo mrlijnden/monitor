@@ -45,6 +45,7 @@ REFRESH_INTERVALS = {
     "bikes": 900,         # 15 minutes
     "flights": 120,       # 2 minutes
     "vision": 30,         # 30 seconds (AI detection refresh)
+    "emergency": 60,      # 1 minute (P2000 emergency feed)
 }
 
 # Cache TTL (slightly longer than refresh to handle delays)
@@ -60,4 +61,5 @@ CACHE_TTL = {
     "bikes": 1000,
     "flights": 150,
     "vision": 45,
+    "emergency": 90,
 }

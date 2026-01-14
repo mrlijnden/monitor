@@ -3,7 +3,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from app.config import REFRESH_INTERVALS
 from app.services import weather, news, transit, events, air_quality, markets
-from app.services import parking, trains, bikes, flights, vision, cameras
+from app.services import parking, trains, bikes, flights, vision, cameras, emergency
 
 scheduler = AsyncIOScheduler()
 
@@ -65,6 +65,11 @@ async def refresh_vision():
     await vision.fetch_vision()
     await vision.refresh_all_annotated_frames()
     await notify_clients("vision")
+
+
+async def refresh_emergency():
+    await emergency.fetch_emergency()
+    await notify_clients("emergency")
 
 
 async def notify_clients(panel: str):
@@ -144,6 +149,12 @@ def setup_scheduler():
         id="vision",
         replace_existing=True,
     )
+    scheduler.add_job(
+        refresh_emergency,
+        IntervalTrigger(seconds=REFRESH_INTERVALS["emergency"]),
+        id="emergency",
+        replace_existing=True,
+    )
 
     scheduler.start()
 
@@ -161,5 +172,6 @@ async def initial_fetch():
         parking.fetch_parking(),
         bikes.fetch_bikes(),
         flights.fetch_flights(),
+        emergency.fetch_emergency(),
         return_exceptions=True,
     )
