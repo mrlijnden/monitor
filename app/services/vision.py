@@ -529,37 +529,57 @@ async def refresh_annotated_frame(camera_id: str) -> Optional[bytes]:
     """Generate and cache a new annotated frame for a camera"""
     from app.services import cameras
 
+    print(f"[VISION] refresh_annotated_frame called for camera: {camera_id}")
+
     # Get camera info
     camera_list = cameras.get_camera_list()
     camera_info = next((cam for cam in camera_list if cam["id"] == camera_id), None)
 
     if not camera_info:
+        print(f"[VISION] Camera {camera_id} not found in camera list")
         return None
 
     video_id = camera_info.get("video_id")
     image_url = camera_info.get("url")
+    print(f"[VISION] Camera {camera_id}: video_id={video_id}, image_url={image_url}")
 
     # Get image from source
     image_bytes = None
     if video_id:
         import random
         timestamp = random.randint(3, 10)
+        print(f"[VISION] Extracting frame from YouTube video {video_id} at {timestamp}s")
         image_bytes = await extract_youtube_frame(video_id, timestamp=timestamp)
+        if image_bytes:
+            print(f"[VISION] Got frame: {len(image_bytes)} bytes")
+        else:
+            print(f"[VISION] Frame extraction returned None")
     elif image_url:
+        print(f"[VISION] Fetching image from URL: {image_url}")
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(image_url)
             if response.status_code == 200:
                 image_bytes = response.content
+                print(f"[VISION] Got image from URL: {len(image_bytes)} bytes")
+            else:
+                print(f"[VISION] URL fetch failed with status {response.status_code}")
 
     if not image_bytes:
+        print(f"[VISION] No image bytes, generating placeholder for {camera_id}")
         # Generate placeholder image
         image_bytes = generate_placeholder_image(camera_id)
         if not image_bytes:
+            print(f"[VISION] Placeholder generation also failed!")
             return None
+        print(f"[VISION] Using placeholder image: {len(image_bytes)} bytes")
 
     # Detect objects
+    print(f"[VISION] Running object detection on {len(image_bytes)} bytes")
     objects = await detect_objects_huggingface(image_bytes)
-    if not objects:
+    if objects:
+        print(f"[VISION] Huggingface detected {len(objects)} objects")
+    else:
+        print(f"[VISION] Huggingface returned no objects, trying Google Vision")
         objects = await detect_objects_google_vision(image_bytes)
 
     if not objects:
