@@ -2,14 +2,21 @@ import httpx
 import re
 import json
 import asyncio
+import time
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Dict
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 from app.config import CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
-# Amsterdam parking data sources - Direct WFS endpoint
-AMSTERDAM_WFS_URL = "https://maps.amsterdam.nl/open_geodata/geojson_lnglat.php?KAARTLAAG=PARKEERGARAGES&THEMA=parkeergarages_bezetting"
+# Amsterdam parking data sources
 AMSTERDAM_MAPS_URL = "https://maps.amsterdam.nl/parkeergarages_bezetting/"
 
 def parse_parking_html(html_content: str) -> List[Dict]:
@@ -140,65 +147,123 @@ def parse_geojson_feature(feature: dict) -> Dict:
         return None
 
 
-async def fetch_from_wfs_api() -> List[Dict]:
-    """Fetch parking data directly from Amsterdam Open GeoData WFS API"""
-    garages = []
+def get_chromedriver_path():
+    """Get chromedriver path - prefer system install on Linux"""
+    import os
+    import shutil
 
+    # Check for system chromedriver first (nixpacks/linux)
+    system_paths = [
+        "/usr/bin/chromedriver",
+        "/usr/local/bin/chromedriver",
+        shutil.which("chromedriver"),
+    ]
+    for path in system_paths:
+        if path and os.path.exists(path):
+            return path
+
+    # Fallback to webdriver_manager (local dev)
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            # Try the GeoJSON endpoint
-            response = await client.get(
-                AMSTERDAM_WFS_URL,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "Accept": "application/json"
-                }
+        return ChromeDriverManager().install()
+    except:
+        return None
+
+
+async def scrape_with_selenium(url: str) -> List[Dict]:
+    """Scrape parking data using Selenium with network interception"""
+    def run_selenium():
+        import shutil
+
+        options = Options()
+        options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--window-size=1920,1080')
+        options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36')
+
+        # Set chromium binary path for nixpacks/linux
+        chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
+        if chromium_path:
+            options.binary_location = chromium_path
+
+        # Enable performance logging to capture network requests
+        options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
+
+        garages = []
+        driver = None
+
+        try:
+            driver_path = get_chromedriver_path()
+            if driver_path:
+                service = Service(driver_path)
+            else:
+                service = Service()
+            driver = webdriver.Chrome(service=service, options=options)
+
+            print("Opening Amsterdam parking page...")
+            driver.get(url)
+
+            # Wait for page to load
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
 
-            if response.status_code == 200:
-                data = response.json()
+            # Wait for JavaScript to load data
+            time.sleep(5)
 
-                # Parse GeoJSON features
-                features = data.get("features", [])
-                for feature in features:
-                    props = feature.get("properties", {})
+            # Get performance logs to find network responses
+            logs = driver.get_log('performance')
 
-                    name = props.get("Naam") or props.get("naam") or props.get("V") or "Unknown"
-                    free_spaces = props.get("FreeSpaceShort") or props.get("vrij") or props.get("free")
-                    capacity = props.get("ShortCapacity") or props.get("capaciteit") or props.get("capacity")
+            # Look for parking data in ALL network responses (multiple layers)
+            seen_names = set()
+            for log in logs:
+                try:
+                    message = json.loads(log['message'])['message']
+                    method = message.get('method', '')
 
-                    # Try alternative field names
-                    if free_spaces is None:
-                        free_spaces = props.get("VrijeCapaciteit") or props.get("vrije_plaatsen")
-                    if capacity is None:
-                        capacity = props.get("Capaciteit") or props.get("totaal")
+                    if method == 'Network.responseReceived':
+                        params = message.get('params', {})
+                        request_id = params.get('requestId')
+                        response_url = params.get('response', {}).get('url', '')
 
-                    if capacity and capacity > 0 and free_spaces is not None:
-                        occupied = capacity - free_spaces
-                        occupancy = int((occupied / capacity) * 100) if capacity > 0 else 0
+                        # Check if this is the WFS endpoint with parking data
+                        if 'haal.objecten.wfs.php' in response_url or 'haal.objecten.php' in response_url:
+                            try:
+                                body = driver.execute_cdp_cmd('Network.getResponseBody', {'requestId': request_id})
+                                body_text = body.get('body', '')
 
-                        # Get coordinates from geometry
-                        geometry = feature.get("geometry", {})
-                        coords = geometry.get("coordinates", [None, None])
+                                if body_text and 'FreeSpaceShort' in body_text:
+                                    data = json.loads(body_text)
+                                    if isinstance(data, list):
+                                        for item in data:
+                                            if isinstance(item, dict) and 'FreeSpaceShort' in item:
+                                                garage = parse_maps_garage(item)
+                                                if garage and garage['name'] not in seen_names:
+                                                    garages.append(garage)
+                                                    seen_names.add(garage['name'])
+                            except Exception:
+                                continue
+                except Exception:
+                    continue
 
-                        garages.append({
-                            "name": name,
-                            "capacity": capacity,
-                            "free_spaces": free_spaces,
-                            "occupied": occupied,
-                            "occupancy": occupancy,
-                            "lat": coords[1] if len(coords) > 1 else None,
-                            "lng": coords[0] if len(coords) > 0 else None
-                        })
+            if garages:
+                print(f"Found {len(garages)} parking garages from network")
 
-                if garages:
-                    print(f"Fetched {len(garages)} parking garages from WFS API")
-                    return garages
+            return garages
 
-    except Exception as e:
-        print(f"WFS API error: {e}")
+        except Exception as e:
+            print(f"Selenium error: {e}")
+            return []
+        finally:
+            if driver:
+                try:
+                    driver.quit()
+                except:
+                    pass
 
-    return garages
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, run_selenium)
 
 
 def parse_maps_garage(item: dict) -> Dict:
@@ -404,22 +469,14 @@ async def fetch_parking() -> dict:
     garages = []
     source = None
 
-    # Try WFS API first (no Selenium needed)
+    # Use Selenium to scrape from Maps Amsterdam with network interception
     try:
-        garages = await fetch_from_wfs_api()
+        garages = await scrape_with_selenium(AMSTERDAM_MAPS_URL)
         if garages:
-            source = "wfs_api"
+            print(f"Fetched {len(garages)} parking garages from Amsterdam Maps")
+            source = "amsterdam_maps"
     except Exception as e:
-        print(f"Error fetching from WFS API: {e}")
-
-    # Fallback to other API methods if WFS failed
-    if not garages:
-        try:
-            garages = await fetch_parking_from_api()
-            if garages:
-                source = "open_data_api"
-        except Exception as e:
-            print(f"Error fetching parking data: {e}")
+        print(f"Error fetching parking data: {e}")
 
     result = {
         "garages": garages[:30],  # Limit to top 30
