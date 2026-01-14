@@ -12,10 +12,12 @@ templates = Jinja2Templates(directory="app/templates")
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Render the main dashboard."""
+    # Detect if running locally (Flightradar24 blocks iframes on localhost)
+    is_local = request.url.hostname in ["localhost", "127.0.0.1", "0.0.0.0"]
+    
     data = {
         "weather": await weather.get_weather(),
         "news": await news.get_news(),
-        "hackernews": await hackernews.get_hackernews(),
         "transit": await transit.get_transit(),
         "trains": await trains.get_trains(),
         "events": await events.get_events(),
@@ -23,6 +25,7 @@ async def index(request: Request):
         "markets": await markets.get_markets(),
         "parking": await parking.get_parking(),
         "bikes": await bikes.get_bikes(),
+        "is_local": is_local,
     }
     return templates.TemplateResponse("index.html", {"request": request, **data})
 
@@ -84,12 +87,6 @@ async def partial_weather(request: Request):
 async def partial_news(request: Request):
     data = await news.get_news()
     return templates.TemplateResponse("partials/news.html", {"request": request, "news": data})
-
-
-@router.get("/partial/hackernews", response_class=HTMLResponse)
-async def partial_hackernews(request: Request):
-    data = await hackernews.get_hackernews()
-    return templates.TemplateResponse("partials/hackernews.html", {"request": request, "hackernews": data})
 
 
 @router.get("/partial/transit", response_class=HTMLResponse)
