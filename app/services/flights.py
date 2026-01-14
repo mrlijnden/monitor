@@ -12,6 +12,9 @@ from app.core.cache import cache
 SCHIPHOL_DEPARTURES_URL = "https://www.schiphol.nl/en/departures/"
 SCHIPHOL_ARRIVALS_URL = "https://www.schiphol.nl/en/arrivals/"
 
+# Flightradar24 URLs
+FLIGHTRADAR24_AMS_URL = "https://www.flightradar24.com/data/airports/ams"
+
 # Schiphol Flight API (requires API keys - set in environment)
 SCHIPHOL_API_URL = "https://api.schiphol.nl/public-flights/flights"
 SCHIPHOL_APP_ID = None  # Set via SCHIPHOL_APP_ID env var
@@ -390,12 +393,176 @@ async def fetch_schiphol_api() -> Optional[Dict]:
     return None
 
 
-async def get_flights_data() -> Dict:
-    """Get Schiphol flight data - tries API first, then HTML scraping"""
+def parse_flightradar24_html(html_content: str) -> Dict:
+    """Parse Flightradar24 airport page for arrivals and departures"""
     departures = []
     arrivals = []
     
-    # First try official Schiphol API (if credentials available)
+    if not html_content:
+        return {"departures": departures, "arrivals": arrivals}
+    
+    # Check for Cloudflare challenge
+    if "Just a moment" in html_content or "challenge-platform" in html_content:
+        print("Flightradar24: Cloudflare protection detected")
+        return {"departures": departures, "arrivals": arrivals}
+    
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Flightradar24 uses tables for flight data
+        # Look for tables with flight information
+        tables = soup.find_all('table')
+        
+        for table in tables:
+            rows = table.find_all('tr')
+            if not rows:
+                continue
+            
+            # Check if this is arrivals or departures table
+            # Look for headers or context
+            table_text = table.get_text().lower()
+            is_arrivals = 'arrival' in table_text or 'from' in table_text
+            is_departures = 'departure' in table_text or 'to' in table_text
+            
+            for row in rows[1:]:  # Skip header row
+                cells = row.find_all(['td', 'th'])
+                if len(cells) < 3:
+                    continue
+                
+                try:
+                    # Extract flight data from cells
+                    # Format: TIME | FLIGHT | FROM/TO | AIRLINE | AIRCRAFT | STATUS
+                    flight_text = ' '.join([cell.get_text(strip=True) for cell in cells])
+                    
+                    # Extract flight number (e.g., KL1234, EZY567)
+                    flight_match = re.search(r'\b([A-Z]{2,3}\s*\d{2,4})\b', flight_text)
+                    if not flight_match:
+                        continue
+                    
+                    flight_code = flight_match.group(1).replace(' ', '')
+                    
+                    # Extract time (HH:MM format)
+                    time_match = re.search(r'(\d{1,2}):(\d{2})', flight_text)
+                    time_str = time_match.group(0) if time_match else None
+                    
+                    # Extract destination/origin (airport code or city)
+                    airport_match = re.search(r'\b([A-Z]{3})\b', flight_text)
+                    destination = airport_match.group(1) if airport_match else "Unknown"
+                    
+                    # Extract status
+                    status = "on-time"
+                    if "delayed" in flight_text.lower() or "delay" in flight_text.lower():
+                        status = "delayed"
+                        delay_match = re.search(r'(\d+)\s*(?:min|minutes?)', flight_text.lower())
+                        delay = int(delay_match.group(1)) if delay_match else None
+                    elif "boarding" in flight_text.lower():
+                        status = "boarding"
+                        delay = None
+                    elif "departed" in flight_text.lower() or "left" in flight_text.lower():
+                        status = "departed"
+                        delay = None
+                    elif "landed" in flight_text.lower() or "arrived" in flight_text.lower():
+                        status = "arrived"
+                        delay = None
+                    elif "cancelled" in flight_text.lower() or "canceled" in flight_text.lower():
+                        status = "cancelled"
+                        delay = None
+                    else:
+                        delay = None
+                    
+                    flight_data = {
+                        "code": flight_code,
+                        "airline": flight_code[:2] if len(flight_code) >= 2 else "Unknown",
+                        "destination" if is_departures else "origin": destination,
+                        "time": time_str or amsterdam_now().strftime("%H:%M"),
+                        "status": status,
+                        "delay": delay,
+                        "gate": None,
+                        "terminal": None
+                    }
+                    
+                    if is_arrivals:
+                        arrivals.append(flight_data)
+                    elif is_departures:
+                        departures.append(flight_data)
+                        
+                except Exception as e:
+                    continue
+        
+        # Also try to find JSON data in script tags (Flightradar24 loads data via JS)
+        scripts = soup.find_all('script')
+        for script in scripts:
+            script_text = script.string or ""
+            # Look for flight data in JSON format
+            if 'flight' in script_text.lower() and ('arrival' in script_text.lower() or 'departure' in script_text.lower()):
+                # Try to extract JSON arrays
+                json_patterns = [
+                    r'arrivals\s*[:=]\s*\[(.*?)\]',
+                    r'departures\s*[:=]\s*\[(.*?)\]',
+                    r'flights\s*[:=]\s*\[(.*?)\]',
+                ]
+                for pattern in json_patterns:
+                    matches = re.findall(pattern, script_text, re.DOTALL | re.IGNORECASE)
+                    # Could parse JSON here if found
+                    break
+    
+    except Exception as e:
+        print(f"Error parsing Flightradar24 HTML: {e}")
+    
+    return {"departures": departures[:15], "arrivals": arrivals[:15]}
+
+
+async def get_flights_data() -> Dict:
+    """Get Schiphol flight data - tries Flightradar24 first, then Schiphol API/scraping"""
+    departures = []
+    arrivals = []
+    
+    # First try Flightradar24 scraping (most reliable)
+    try:
+        import asyncio
+        
+        def scrape_fr24_sync(url: str) -> str:
+            """Synchronous scraping with cloudscraper"""
+            scraper = cloudscraper.create_scraper(
+                browser={
+                    'browser': 'chrome',
+                    'platform': 'windows',
+                    'desktop': True
+                },
+                delay=10  # Add delay to avoid rate limiting
+            )
+            try:
+                response = scraper.get(url, timeout=20, headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                })
+                return response.text if response.status_code == 200 else ""
+            except Exception as e:
+                print(f"Cloudscraper error for {url}: {e}")
+                return ""
+        
+        loop = asyncio.get_event_loop()
+        fr24_html = await loop.run_in_executor(None, scrape_fr24_sync, FLIGHTRADAR24_AMS_URL)
+        
+        if fr24_html:
+            fr24_data = parse_flightradar24_html(fr24_html)
+            departures = fr24_data.get("departures", [])
+            arrivals = fr24_data.get("arrivals", [])
+            
+            if departures or arrivals:
+                print(f"Scraped {len(departures)} departures and {len(arrivals)} arrivals from Flightradar24")
+                result = {
+                    "departures": departures,
+                    "arrivals": arrivals,
+                    "updated": amsterdam_now().strftime("%H:%M:%S"),
+                    "runway": None,
+                    "source": "flightradar24"
+                }
+                cache.set("flights", result, CACHE_TTL.get("flights", 120))
+                return result
+    except Exception as e:
+        print(f"Error scraping Flightradar24: {e}")
+    
+    # Fallback: Try official Schiphol API (if credentials available)
     api_data = await fetch_schiphol_api()
     if api_data:
         return {
@@ -406,9 +573,8 @@ async def get_flights_data() -> Dict:
             "source": "api"
         }
     
-    # Try HTML scraping with cloudscraper to bypass Cloudflare
+    # Last resort: Try Schiphol HTML scraping
     try:
-        # Use cloudscraper (synchronous) - wrap in thread if needed for async
         import asyncio
         
         def scrape_schiphol_sync(url: str) -> str:
@@ -427,7 +593,6 @@ async def get_flights_data() -> Dict:
                 print(f"Cloudscraper error for {url}: {e}")
                 return ""
         
-        # Run scraping in executor to avoid blocking
         loop = asyncio.get_event_loop()
         
         # Try departures
