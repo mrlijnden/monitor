@@ -24,13 +24,6 @@
             {{ cam.name }} - {{ cam.location }}
             <span style="float: right; font-size: 8px; color: #ff0000;">● LIVE</span>
         </div>
-        <div class="camera-detections" id="camera-detections{{ suffix }}" 
-             hx-get="/partial/vision/{{ cam.id }}"
-             hx-trigger="load, every 60s"
-             hx-swap="innerHTML"
-             style="position: absolute; bottom: 5px; left: 5px; background: rgba(0, 0, 0, 0.85); padding: 4px 8px; border-radius: 3px; font-size: 8px; color: var(--text-muted); max-width: 200px; border: 1px solid rgba(0, 204, 204, 0.3);">
-            <div class="loading" style="font-size: 7px;">Analyzing...</div>
-        </div>
     </div>
     <button class="camera-nav prev" onclick="prevCamera{{ suffix }}()">&lt;</button>
     <button class="camera-nav next" onclick="nextCamera{{ suffix }}()">&gt;</button>
@@ -56,49 +49,18 @@
 
     function updateCamera{{ suffix }}() {
         const cam = cameras{{ suffix }}[currentIndex{{ suffix }}];
-        const container = document.getElementById('camera-viewer{{ suffix }}');
         const name = document.getElementById('camera-name{{ suffix }}');
 
-        // Update name
         if (name) {
             name.innerHTML = '<span class="status-dot online"></span>' +
                 cam.name + ' - ' + cam.location +
                 '<span style="float: right; font-size: 8px; color: #ff0000;">● LIVE</span>';
         }
 
-        // Update video/image
         if (cam.type === 'youtube' && cam.embed) {
             let frame = document.getElementById('camera-frame{{ suffix }}');
-            if (!frame) {
-                // Create iframe if it doesn't exist
-                const img = document.getElementById('camera-img{{ suffix }}');
-                if (img) img.remove();
-                frame = document.createElement('iframe');
-                frame.id = 'camera-frame{{ suffix }}';
-                frame.className = 'camera-feed';
-                frame.style = 'width: 100%; height: 100%; border: none;';
-                frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
-                frame.allowFullscreen = true;
-                container.insertBefore(frame, container.querySelector('.camera-overlay'));
-            }
-            frame.src = cam.embed;
-        } else if (cam.image) {
-            let img = document.getElementById('camera-img{{ suffix }}');
-            if (!img) {
-                const frame = document.getElementById('camera-frame{{ suffix }}');
-                if (frame) frame.remove();
-                img = document.createElement('img');
-                img.id = 'camera-img{{ suffix }}';
-                img.className = 'camera-feed';
-                container.insertBefore(img, container.querySelector('.camera-overlay'));
-            }
-            img.src = cam.image + '?t=' + Date.now();
+            if (frame) frame.src = cam.embed;
         }
-    }
-
-    // Auto-rotate every 30 seconds
-    if (cameras{{ suffix }}.length > 1) {
-        setInterval(window.nextCamera{{ suffix }}, 30000);
     }
 })();
 </script>

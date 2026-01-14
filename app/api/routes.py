@@ -214,3 +214,13 @@ async def api_vision_image(camera_id: str):
     if image_bytes:
         return Response(content=image_bytes, media_type="image/jpeg")
     return Response(content=b"", status_code=404)
+
+
+@router.get("/partial/ai_detection/{camera_id}", response_class=HTMLResponse)
+async def partial_ai_detection(request: Request, camera_id: str):
+    """Get AI detection panel HTML partial"""
+    return templates.TemplateResponse("partials/ai_detection.html", {
+        "request": request,
+        "camera_id": camera_id,
+        "panel_suffix": f"_{camera_id}"
+    })

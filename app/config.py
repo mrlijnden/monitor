@@ -44,7 +44,7 @@ REFRESH_INTERVALS = {
     "parking": 300,       # 5 minutes
     "bikes": 900,         # 15 minutes
     "flights": 120,       # 2 minutes
-    "vision": 300,        # 5 minutes (object detection)
+    "vision": 30,         # 30 seconds (AI detection refresh)
 }
 
 # Cache TTL (slightly longer than refresh to handle delays)
@@ -59,5 +59,5 @@ CACHE_TTL = {
     "parking": 350,
     "bikes": 1000,
     "flights": 150,
-    "vision": 350,
+    "vision": 45,
 }

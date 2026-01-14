@@ -63,6 +63,7 @@ async def refresh_flights():
 
 async def refresh_vision():
     await vision.fetch_vision()
+    await vision.refresh_all_annotated_frames()
     await notify_clients("vision")
 
 

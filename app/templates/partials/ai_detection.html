@@ -1,0 +1,27 @@
+{% set suffix = panel_suffix | default('') %}
+{% set cam_id = camera_id | default('dam') %}
+<div class="ai-detection-container" id="ai-viewer{{ suffix }}">
+    <img id="ai-img{{ suffix }}"
+         src="/api/vision/{{ cam_id }}/image?t={{ range(1000000) | random }}"
+         style="width: 100%; height: 100%; object-fit: contain; background: #0a0a0a;"
+         onload="document.getElementById('ai-time{{ suffix }}').textContent = new Date().toLocaleTimeString();"
+         onerror="this.style.opacity='0.3'; document.getElementById('ai-time{{ suffix }}').textContent = 'error';">
+    <div class="ai-overlay" style="position: absolute; bottom: 5px; left: 5px; background: rgba(0,0,0,0.8); padding: 3px 8px; border-radius: 3px; border: 1px solid #0cc;">
+        <span style="font-size: 8px; color: #0cc;">AI DETECTION</span>
+        <span id="ai-time{{ suffix }}" style="font-size: 8px; color: #666; margin-left: 8px;">loading...</span>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Auto-refresh AI image every 30 seconds
+    setInterval(function() {
+        const img = document.getElementById('ai-img{{ suffix }}');
+        const time = document.getElementById('ai-time{{ suffix }}');
+        if (img) {
+            time.textContent = 'loading...';
+            img.src = '/api/vision/{{ cam_id }}/image?t=' + Date.now();
+        }
+    }, 30000);
+})();
+</script>

@@ -116,37 +116,49 @@
             </div>
         </div>
 
-        <!-- Live Cameras Panel 1 -->
-        <div class="panel" id="panel-cameras">
+        <!-- Live Camera + AI Panel 1 -->
+        <div class="panel" id="panel-camera-ai">
             <div class="panel-header">
-                <span class="panel-title">Live Cameras</span>
-                <span class="panel-badge camera">CAM 1</span>
+                <span class="panel-title">Dam Square</span>
+                <span class="panel-badge camera">LIVE+AI</span>
             </div>
-            <div class="panel-content" style="padding: 0;"
-                 hx-get="/partial/cameras"
-                 hx-trigger="load"
-                 hx-swap="innerHTML">
-                <div class="camera-container">
-                    <div class="loading" style="padding: 10px;">Loading cameras...</div>
+            <div class="panel-content" style="padding: 0; display: flex; flex-direction: column; height: 100%;">
+                <div style="flex: 1; position: relative; min-height: 0;">
+                    <iframe src="https://www.youtube.com/embed/Gd9d4q6WvUY?autoplay=1&mute=1&controls=0" style="width: 100%; height: 100%; border: none;" allow="autoplay" allowfullscreen></iframe>
+                    <div style="position: absolute; top: 3px; right: 3px; font-size: 7px; color: #f00;">● LIVE</div>
+                </div>
+                <div style="flex: 1; position: relative; min-height: 0; background: #0a0a0a; border-top: 1px solid #0cc;">
+                    <img id="ai-img1" src="/api/vision/dam/image?t=1" style="width: 100%; height: 100%; object-fit: contain;" onload="document.getElementById('ai-time1').textContent=new Date().toLocaleTimeString()">
+                    <div style="position: absolute; bottom: 3px; left: 3px; font-size: 7px; color: #0cc;">AI <span id="ai-time1">...</span></div>
                 </div>
             </div>
         </div>
 
-        <!-- Live Cameras Panel 2 -->
-        <div class="panel" id="panel-cameras2">
+        <!-- Live Camera + AI Panel 2 -->
+        <div class="panel" id="panel-camera-ai2">
             <div class="panel-header">
-                <span class="panel-title">Live Cameras</span>
-                <span class="panel-badge camera">CAM 2</span>
+                <span class="panel-title">Centraal</span>
+                <span class="panel-badge camera">LIVE+AI</span>
             </div>
-            <div class="panel-content" style="padding: 0;"
-                 hx-get="/partial/cameras2"
-                 hx-trigger="load"
-                 hx-swap="innerHTML">
-                <div class="camera-container">
-                    <div class="loading" style="padding: 10px;">Loading cameras...</div>
+            <div class="panel-content" style="padding: 0; display: flex; flex-direction: column; height: 100%;">
+                <div style="flex: 1; position: relative; min-height: 0;">
+                    <iframe src="https://www.youtube.com/embed/2tgHBRFHMm8?autoplay=1&mute=1&controls=0" style="width: 100%; height: 100%; border: none;" allow="autoplay" allowfullscreen></iframe>
+                    <div style="position: absolute; top: 3px; right: 3px; font-size: 7px; color: #f00;">● LIVE</div>
+                </div>
+                <div style="flex: 1; position: relative; min-height: 0; background: #0a0a0a; border-top: 1px solid #0cc;">
+                    <img id="ai-img2" src="/api/vision/centraal/image?t=1" style="width: 100%; height: 100%; object-fit: contain;" onload="document.getElementById('ai-time2').textContent=new Date().toLocaleTimeString()">
+                    <div style="position: absolute; bottom: 3px; left: 3px; font-size: 7px; color: #0cc;">AI <span id="ai-time2">...</span></div>
                 </div>
             </div>
         </div>
+
+        <script>
+            // Backend refreshes AI images every 30s, clients just poll for updates
+            setInterval(function() {
+                document.getElementById('ai-img1').src = '/api/vision/dam/image?t=' + Date.now();
+                document.getElementById('ai-img2').src = '/api/vision/centraal/image?t=' + Date.now();
+            }, 35000); // Slightly offset from backend refresh
+        </script>
 
         <!-- System Status Panel -->
         <div class="panel" id="panel-system">

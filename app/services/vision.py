@@ -383,9 +383,11 @@ def draw_bounding_boxes(image_bytes: bytes, objects: List[Dict], image_size: Tup
             font = ImageFont.load_default()
             small_font = font
 
-        # Track labels for color assignment
+        # Track labels for color assignment and counting
         label_colors = {}
+        label_counts = {}
         color_index = 0
+        drawn_count = 0
 
         for obj in objects:
             label = obj.get('label') or obj.get('name', 'Unknown')
@@ -395,6 +397,10 @@ def draw_bounding_boxes(image_bytes: bytes, objects: List[Dict], image_size: Tup
             # Skip low confidence detections
             if score < 0.4:
                 continue
+
+            # Count labels
+            label_counts[label] = label_counts.get(label, 0) + 1
+            drawn_count += 1
 
             # Get bounding box coordinates
             if isinstance(box, dict) and 'xmin' in box:
@@ -423,6 +429,35 @@ def draw_bounding_boxes(image_bytes: bytes, objects: List[Dict], image_size: Tup
             # Draw label text
             draw.text((xmin, ymin - 20), label_text, fill=(0, 0, 0), font=small_font)
 
+        # Draw summary overlay in top-right corner
+        summary_lines = [f"DETECTED: {drawn_count}"]
+        for label, count in sorted(label_counts.items(), key=lambda x: -x[1])[:5]:
+            summary_lines.append(f"{label}: {count}")
+
+        # Calculate box size
+        padding = 8
+        line_height = 14
+        max_width = 0
+        for line in summary_lines:
+            bbox = draw.textbbox((0, 0), line, font=small_font)
+            max_width = max(max_width, bbox[2] - bbox[0])
+
+        box_width = max_width + padding * 2
+        box_height = len(summary_lines) * line_height + padding * 2
+
+        # Draw summary box
+        box_x = width - box_width - 10
+        box_y = 10
+        draw.rectangle([box_x, box_y, box_x + box_width, box_y + box_height],
+                      fill=(0, 0, 0, 200), outline=(0, 204, 204))
+
+        # Draw summary text
+        y = box_y + padding
+        for i, line in enumerate(summary_lines):
+            color = (0, 204, 204) if i == 0 else (200, 200, 200)
+            draw.text((box_x + padding, y), line, fill=color, font=small_font)
+            y += line_height
+
         # Convert back to bytes
         output = io.BytesIO()
         image.save(output, format='JPEG', quality=85)
@@ -435,7 +470,17 @@ def draw_bounding_boxes(image_bytes: bytes, objects: List[Dict], image_size: Tup
 
 
 async def get_annotated_frame(camera_id: str) -> Optional[bytes]:
-    """Get a camera frame with bounding boxes drawn on detected objects"""
+    """Get cached annotated frame or return None if not available"""
+    cache_key = f"vision_image_{camera_id}"
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+    # If not cached, generate one (first request)
+    return await refresh_annotated_frame(camera_id)
+
+
+async def refresh_annotated_frame(camera_id: str) -> Optional[bytes]:
+    """Generate and cache a new annotated frame for a camera"""
     from app.services import cameras
 
     # Get camera info
@@ -469,9 +514,27 @@ async def get_annotated_frame(camera_id: str) -> Optional[bytes]:
         objects = await detect_objects_google_vision(image_bytes)
 
     if not objects:
-        # Return original image if no detections
+        # Cache original image if no detections
+        cache.set(f"vision_image_{camera_id}", image_bytes, 60)
         return image_bytes
 
     # Draw bounding boxes
     annotated_image = draw_bounding_boxes(image_bytes, objects)
+
+    # Cache for 60 seconds (will be refreshed by scheduler every 30s)
+    cache.set(f"vision_image_{camera_id}", annotated_image, 60)
+    print(f"Refreshed AI detection for camera {camera_id}: {len(objects)} objects")
+
     return annotated_image
+
+
+async def refresh_all_annotated_frames():
+    """Refresh annotated frames for all cameras - called by scheduler"""
+    from app.services import cameras
+
+    camera_list = cameras.get_camera_list()
+    for cam in camera_list:
+        try:
+            await refresh_annotated_frame(cam["id"])
+        except Exception as e:
+            print(f"Error refreshing AI frame for {cam['id']}: {e}")
