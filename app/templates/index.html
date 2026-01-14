@@ -481,6 +481,79 @@
             }, 1000);
         });
 
+        // Panel Zoom Feature
+        (function() {
+            function openZoom(panel) {
+                const title = panel.querySelector('.panel-title')?.textContent || 'Panel';
+                const content = panel.querySelector('.panel-content');
+                if (!content) return;
+
+                const overlay = document.createElement('div');
+                overlay.className = 'panel-zoom-overlay';
+                overlay.innerHTML = `
+                    <div class="panel-zoom-content" onclick="event.stopPropagation()">
+                        <div class="panel-zoom-header">
+                            <span class="panel-zoom-title">${title}</span>
+                            <span class="panel-zoom-close">&times;</span>
+                        </div>
+                        <div class="panel-zoom-body"></div>
+                    </div>
+                `;
+
+                // Clone content into zoom view
+                const zoomBody = overlay.querySelector('.panel-zoom-body');
+                zoomBody.innerHTML = content.innerHTML;
+
+                // Handle iframes - recreate them for proper sizing
+                const iframes = zoomBody.querySelectorAll('iframe');
+                iframes.forEach(iframe => {
+                    iframe.style.width = '100%';
+                    iframe.style.height = '100%';
+                    iframe.style.minHeight = '500px';
+                });
+
+                // Handle images
+                const images = zoomBody.querySelectorAll('img');
+                images.forEach(img => {
+                    img.style.maxWidth = '100%';
+                    img.style.height = 'auto';
+                });
+
+                // Close handlers
+                overlay.addEventListener('click', () => closeZoom(overlay));
+                overlay.querySelector('.panel-zoom-close').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    closeZoom(overlay);
+                });
+
+                document.body.appendChild(overlay);
+
+                // ESC key to close
+                const escHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        closeZoom(overlay);
+                        document.removeEventListener('keydown', escHandler);
+                    }
+                };
+                document.addEventListener('keydown', escHandler);
+            }
+
+            function closeZoom(overlay) {
+                overlay.classList.add('closing');
+                setTimeout(() => overlay.remove(), 200);
+            }
+
+            // Add click listeners to all panels (except map)
+            document.querySelectorAll('.panel:not(.panel-map)').forEach(panel => {
+                panel.style.cursor = 'pointer';
+                panel.addEventListener('click', (e) => {
+                    // Don't zoom if clicking on interactive elements
+                    if (e.target.closest('a, button, input, .postcode-config')) return;
+                    openZoom(panel);
+                });
+            });
+        })();
+
         // P2000 Postcode Notification System
         (function() {
             let userPostcode = localStorage.getItem('p2000_postcode') || '';
