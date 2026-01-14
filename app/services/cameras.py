@@ -18,6 +18,13 @@ AMSTERDAM_CAMERAS = [
         "type": "youtube",
         "embed": "https://www.youtube.com/embed/2tgHBRFHMm8?autoplay=1&mute=1",  # Centraal Station live
     },
+    {
+        "id": "live3",
+        "name": "Live Camera",
+        "location": "Amsterdam",
+        "type": "youtube",
+        "embed": "https://www.youtube.com/embed/9Pm6Ji6tm7s?autoplay=1&mute=1",  # Live camera feed
+    },
 ]
 
 # Alternative: webcam image URLs that refresh
