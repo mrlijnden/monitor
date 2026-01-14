@@ -148,10 +148,12 @@ async def extract_youtube_frame(video_id: str, timestamp: int = 5) -> Optional[b
     """Extract a frame from YouTube video using yt-dlp and ffmpeg"""
     try:
         url = f"https://www.youtube.com/watch?v={video_id}"
-        
-        # Method 1: Get stream URL with yt-dlp, then extract frame with ffmpeg
-        # This is the most reliable method for live streams
-        with tempfile.TemporaryDirectory() as tmpdir:
+
+        # Use explicit /tmp for Docker/nixpacks compatibility
+        tmpdir = f"/tmp/vision_{video_id}_{os.getpid()}"
+        os.makedirs(tmpdir, exist_ok=True)
+
+        try:
             # Get the stream URL
             stream_result = await asyncio.to_thread(
                 subprocess.run,
@@ -219,19 +221,29 @@ async def extract_youtube_frame(video_id: str, timestamp: int = 5) -> Optional[b
                     frame_data = f.read()
                     print(f"Extracted frame (method 2) from {video_id}: {len(frame_data)} bytes")
                     return frame_data
-    
+        finally:
+            # Clean up temp directory
+            import shutil
+            try:
+                shutil.rmtree(tmpdir, ignore_errors=True)
+            except:
+                pass
+
     except FileNotFoundError as e:
         print(f"yt-dlp or ffmpeg not found: {e}")
         # Fallback to thumbnail if yt-dlp/ffmpeg not available
         return await extract_youtube_thumbnail(video_id)
     except subprocess.TimeoutExpired:
         print(f"Timeout extracting frame from {video_id}")
+        return await extract_youtube_thumbnail(video_id)
     except Exception as e:
         print(f"Error extracting YouTube frame from {video_id}: {e}")
         # Fallback to thumbnail
         return await extract_youtube_thumbnail(video_id)
-    
-    return None
+
+    # Final fallback to thumbnail
+    print(f"Frame extraction failed for {video_id}, using thumbnail")
+    return await extract_youtube_thumbnail(video_id)
 
 
 async def extract_youtube_thumbnail(video_id: str) -> Optional[bytes]:
