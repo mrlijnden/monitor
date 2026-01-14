@@ -1,10 +1,18 @@
 """Schiphol Flights Service - Scrapes flight data"""
 import httpx
 import re
-from httpx_curl_cffi import AsyncCurlCFFI
+import asyncio
+from httpx_curl_cffi import AsyncCurlTransport
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 from app.config import amsterdam_now, CACHE_TTL
 from app.core.cache import cache
 
@@ -596,7 +604,7 @@ async def get_flights_data() -> Dict:
     # Last resort: Try Schiphol HTML scraping
     try:
         async with httpx.AsyncClient(
-            transport=AsyncCurlCFFI(impersonate="chrome110"),
+            transport=AsyncCurlTransport(impersonate="chrome110"),
             timeout=15.0
         ) as client:
             # Try departures

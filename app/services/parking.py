@@ -2,7 +2,7 @@ import httpx
 import re
 import json
 import asyncio
-from httpx_curl_cffi import AsyncCurlCFFI
+from httpx_curl_cffi import AsyncCurlTransport
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Dict
