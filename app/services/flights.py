@@ -1,7 +1,7 @@
 """Schiphol Flights Service - Scrapes flight data"""
 import httpx
 import re
-import cloudscraper
+from httpx_curl_cffi import AsyncCurlCFFI
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
@@ -519,29 +519,17 @@ async def get_flights_data() -> Dict:
     
     # First try Flightradar24 scraping (most reliable)
     try:
-        import asyncio
-        
-        def scrape_fr24_sync(url: str) -> str:
-            """Synchronous scraping with cloudscraper"""
-            scraper = cloudscraper.create_scraper(
-                browser={
-                    'browser': 'chrome',
-                    'platform': 'windows',
-                    'desktop': True
-                },
-                delay=10  # Add delay to avoid rate limiting
+        async with httpx.AsyncClient(
+            transport=AsyncCurlCFFI(impersonate="chrome110"),
+            timeout=20.0
+        ) as client:
+            response = await client.get(
+                FLIGHTRADAR24_AMS_URL,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
+                }
             )
-            try:
-                response = scraper.get(url, timeout=20, headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                })
-                return response.text if response.status_code == 200 else ""
-            except Exception as e:
-                print(f"Cloudscraper error for {url}: {e}")
-                return ""
-        
-        loop = asyncio.get_event_loop()
-        fr24_html = await loop.run_in_executor(None, scrape_fr24_sync, FLIGHTRADAR24_AMS_URL)
+            fr24_html = response.text if response.status_code == 200 else ""
         
         if fr24_html:
             fr24_data = parse_flightradar24_html(fr24_html)
@@ -575,43 +563,37 @@ async def get_flights_data() -> Dict:
     
     # Last resort: Try Schiphol HTML scraping
     try:
-        import asyncio
-        
-        def scrape_schiphol_sync(url: str) -> str:
-            """Synchronous scraping with cloudscraper"""
-            scraper = cloudscraper.create_scraper(
-                browser={
-                    'browser': 'chrome',
-                    'platform': 'windows',
-                    'desktop': True
-                }
-            )
+        async with httpx.AsyncClient(
+            transport=AsyncCurlCFFI(impersonate="chrome110"),
+            timeout=15.0
+        ) as client:
+            # Try departures
             try:
-                response = scraper.get(url, timeout=15)
-                return response.text if response.status_code == 200 else ""
+                dep_response = await client.get(
+                    SCHIPHOL_DEPARTURES_URL,
+                    headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
+                )
+                if dep_response.status_code == 200:
+                    departures = parse_schiphol_html(dep_response.text, "departure")
+                    print(f"Scraped {len(departures)} departures from Schiphol")
             except Exception as e:
-                print(f"Cloudscraper error for {url}: {e}")
-                return ""
-        
-        loop = asyncio.get_event_loop()
-        
-        # Try departures
-        try:
-            dep_html = await loop.run_in_executor(None, scrape_schiphol_sync, SCHIPHOL_DEPARTURES_URL)
-            if dep_html:
-                departures = parse_schiphol_html(dep_html, "departure")
-                print(f"Scraped {len(departures)} departures from Schiphol")
-        except Exception as e:
-            print(f"Error scraping departures: {e}")
-        
-        # Try arrivals
-        try:
-            arr_html = await loop.run_in_executor(None, scrape_schiphol_sync, SCHIPHOL_ARRIVALS_URL)
-            if arr_html:
-                arrivals = parse_schiphol_html(arr_html, "arrival")
-                print(f"Scraped {len(arrivals)} arrivals from Schiphol")
-        except Exception as e:
-            print(f"Error scraping arrivals: {e}")
+                print(f"Error scraping departures: {e}")
+            
+            # Try arrivals
+            try:
+                arr_response = await client.get(
+                    SCHIPHOL_ARRIVALS_URL,
+                    headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    }
+                )
+                if arr_response.status_code == 200:
+                    arrivals = parse_schiphol_html(arr_response.text, "arrival")
+                    print(f"Scraped {len(arrivals)} arrivals from Schiphol")
+            except Exception as e:
+                print(f"Error scraping arrivals: {e}")
     
     except Exception as e:
         print(f"Error fetching flight data: {e}")

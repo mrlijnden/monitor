@@ -1,15 +1,17 @@
 import httpx
 import re
 import json
-import cloudscraper
+from httpx_curl_cffi import AsyncCurlCFFI
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Dict
 from app.config import CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
-# Amsterdam Maps parking garages URL
-AMSTERDAM_PARKING_URL = "https://maps.amsterdam.nl/parkeergarages_bezetting/"
+# Amsterdam parking data sources
+AMSTERDAM_PARKING_LOCATIONS_URL = "http://open.data.amsterdam.nl/ivv/parkeren/locaties.json"
+AMSTERDAM_PARKING_API_URL = "https://api.data.amsterdam.nl/parkeergarages/"
+AMSTERDAM_MAPS_URL = "https://maps.amsterdam.nl/parkeergarages_bezetting/"
 
 def parse_parking_html(html_content: str) -> List[Dict]:
     """Parse Amsterdam Maps parking page for garage availability"""
@@ -169,46 +171,185 @@ def parse_html_element(elem) -> Dict:
     return None
 
 
-async def fetch_parking() -> dict:
-    """Fetch Amsterdam parking garage availability from Maps Amsterdam."""
+async def fetch_parking_from_api() -> List[Dict]:
+    """Try to fetch parking data from Amsterdam Open Data API"""
     garages = []
     
     try:
-        import asyncio
-        
-        def scrape_parking_sync(url: str) -> str:
-            """Synchronous scraping with cloudscraper"""
-            scraper = cloudscraper.create_scraper(
-                browser={
-                    'browser': 'chrome',
-                    'platform': 'windows',
-                    'desktop': True
-                },
-                delay=10
-            )
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            # Try the locations JSON endpoint first
             try:
-                response = scraper.get(url, timeout=20, headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-                })
-                return response.text if response.status_code == 200 else ""
+                print(f"Trying: {AMSTERDAM_PARKING_LOCATIONS_URL}")
+                response = await client.get(AMSTERDAM_PARKING_LOCATIONS_URL)
+                print(f"Response status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    try:
+                        data = response.json()
+                        print(f"JSON parsed successfully, type: {type(data)}")
+                        
+                        # Handle different JSON structures
+                        if isinstance(data, list):
+                            items = data
+                            print(f"Found list with {len(items)} items")
+                        elif isinstance(data, dict):
+                            items = data.get('features', []) or data.get('results', []) or data.get('data', []) or data.get('parkeerlocaties', [])
+                            print(f"Found dict with keys: {list(data.keys())[:10]}")
+                        else:
+                            items = []
+                        
+                        for item in items[:50]:  # Limit to first 50
+                            garage = parse_api_garage(item)
+                            if garage:
+                                garages.append(garage)
+                        
+                        if garages:
+                            print(f"Fetched {len(garages)} garages from Amsterdam Open Data API")
+                            return garages
+                        else:
+                            print("No garages parsed from API data")
+                            # Debug: show first item structure
+                            if items:
+                                print(f"First item structure: {items[0]}")
+                    except json.JSONDecodeError as e:
+                        print(f"JSON decode error: {e}")
+                        print(f"Response preview: {response.text[:500]}")
             except Exception as e:
-                print(f"Cloudscraper error for parking: {e}")
-                return ""
-        
-        loop = asyncio.get_event_loop()
-        html_content = await loop.run_in_executor(None, scrape_parking_sync, AMSTERDAM_PARKING_URL)
-        
-        if html_content:
-            garages = parse_parking_html(html_content)
-            print(f"Scraped {len(garages)} parking garages from Amsterdam Maps")
+                print(f"Error fetching from locations API: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Try the official API endpoint
+            try:
+                print(f"Trying: {AMSTERDAM_PARKING_API_URL}")
+                response = await client.get(AMSTERDAM_PARKING_API_URL, headers={
+                    'Accept': 'application/json'
+                })
+                print(f"API Response status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    if isinstance(data, dict):
+                        items = data.get('results', []) or data.get('features', []) or data.get('data', [])
+                    elif isinstance(data, list):
+                        items = data
+                    else:
+                        items = []
+                    
+                    for item in items[:50]:
+                        garage = parse_api_garage(item)
+                        if garage:
+                            garages.append(garage)
+                    
+                    if garages:
+                        print(f"Fetched {len(garages)} garages from Amsterdam API")
+                        return garages
+            except Exception as e:
+                print(f"Error fetching from API endpoint: {e}")
     
     except Exception as e:
-        print(f"Error fetching parking data: {e}")
+        print(f"Error fetching parking from API: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    return garages
+
+
+def parse_api_garage(item: dict) -> Dict:
+    """Parse garage data from API response"""
+    try:
+        # Handle GeoJSON format
+        if 'properties' in item:
+            props = item['properties']
+            name = props.get('name') or props.get('title') or props.get('garage') or props.get('locatie') or 'Unknown'
+            capacity = props.get('capacity') or props.get('total') or props.get('max_capacity') or props.get('aantal_plaatsen')
+            free = props.get('free') or props.get('available') or props.get('free_spaces') or props.get('vacant') or props.get('vrij')
+            # Also check for bezetting (occupancy) and calculate free spaces
+            if not free and capacity:
+                bezetting = props.get('bezetting') or props.get('occupied') or props.get('bezet')
+                if bezetting is not None and capacity:
+                    free = int(capacity) - int(bezetting)
+        else:
+            name = item.get('name') or item.get('title') or item.get('garage') or item.get('locatie') or 'Unknown'
+            capacity = item.get('capacity') or item.get('total') or item.get('max_capacity') or item.get('aantal_plaatsen')
+            free = item.get('free') or item.get('available') or item.get('free_spaces') or item.get('vacant') or item.get('vrij')
+            # Also check for bezetting (occupancy) and calculate free spaces
+            if not free and capacity:
+                bezetting = item.get('bezetting') or item.get('occupied') or item.get('bezet')
+                if bezetting is not None and capacity:
+                    free = int(capacity) - int(bezetting)
+        
+        # Try to extract from description or other fields
+        if not capacity or free is None:
+            desc = item.get('description', '') or item.get('info', '') or item.get('omschrijving', '') or ''
+            # Look for numbers in description
+            numbers = re.findall(r'\d+', desc)
+            if len(numbers) >= 2:
+                if free is None:
+                    free = int(numbers[0])
+                if not capacity:
+                    capacity = int(numbers[1])
+        
+        if capacity and free is not None:
+            capacity = int(capacity)
+            free = int(free)
+            occupied = capacity - free
+            occupancy = int((occupied / capacity) * 100) if capacity > 0 else 0
+            
+            return {
+                "name": name[:50],
+                "capacity": capacity,
+                "free_spaces": free,
+                "occupied": occupied,
+                "occupancy": occupancy
+            }
+    except Exception as e:
+        print(f"Error parsing garage: {e}")
+        # Debug: print item structure
+        if isinstance(item, dict):
+            print(f"  Item keys: {list(item.keys())[:10]}")
+    
+    return None
+
+
+async def fetch_parking() -> dict:
+    """Fetch Amsterdam parking garage availability."""
+    garages = []
+    source = None
+    
+    # First try official Amsterdam Open Data API
+    garages = await fetch_parking_from_api()
+    if garages:
+        source = "amsterdam_api"
+    else:
+        # Fallback: Try HTML scraping from Maps Amsterdam
+        try:
+            async with httpx.AsyncClient(
+                transport=AsyncCurlCFFI(impersonate="chrome110"),
+                timeout=20.0
+            ) as client:
+                response = await client.get(
+                    AMSTERDAM_MAPS_URL,
+                    headers={
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                    }
+                )
+                html_content = response.text if response.status_code == 200 else ""
+            
+            if html_content:
+                garages = parse_parking_html(html_content)
+                if garages:
+                    print(f"Scraped {len(garages)} parking garages from Amsterdam Maps")
+                    source = "amsterdam_maps"
+        
+        except Exception as e:
+            print(f"Error fetching parking data: {e}")
     
     result = {
         "garages": garages[:20],  # Limit to top 20
-        "source": "amsterdam_maps" if garages else None,
+        "source": source,
         "updated_at": amsterdam_now().isoformat(),
         "updated": amsterdam_now().strftime("%H:%M:%S"),
     }
