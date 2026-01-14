@@ -393,6 +393,48 @@ async def fetch_schiphol_api() -> Optional[Dict]:
     return None
 
 
+async def scrape_flightradar24_with_selenium() -> str:
+    """Scrape Flightradar24 page using Selenium for JavaScript rendering"""
+    def run_selenium():
+        options = Options()
+        options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--window-size=1920,1080')
+        options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        
+        try:
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+            driver.get(FLIGHTRADAR24_AMS_URL)
+            
+            # Wait for page to load
+            try:
+                WebDriverWait(driver, 20).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
+                # Wait for flight tables to load
+                import time
+                time.sleep(5)  # Give JavaScript time to load flight data
+            except:
+                pass
+            
+            html_content = driver.page_source
+            driver.quit()
+            return html_content
+        except Exception as e:
+            print(f"Selenium error for Flightradar24: {e}")
+            try:
+                driver.quit()
+            except:
+                pass
+            return ""
+    
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, run_selenium)
+
+
 def parse_flightradar24_html(html_content: str) -> Dict:
     """Parse Flightradar24 airport page for arrivals and departures"""
     departures = []
@@ -517,19 +559,9 @@ async def get_flights_data() -> Dict:
     departures = []
     arrivals = []
     
-    # First try Flightradar24 scraping (most reliable)
+    # First try Flightradar24 scraping with Selenium (JavaScript-heavy page)
     try:
-        async with httpx.AsyncClient(
-            transport=AsyncCurlCFFI(impersonate="chrome110"),
-            timeout=20.0
-        ) as client:
-            response = await client.get(
-                FLIGHTRADAR24_AMS_URL,
-                headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
-                }
-            )
-            fr24_html = response.text if response.status_code == 200 else ""
+        fr24_html = await scrape_flightradar24_with_selenium()
         
         if fr24_html:
             fr24_data = parse_flightradar24_html(fr24_html)

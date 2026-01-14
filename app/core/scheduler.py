@@ -21,11 +21,6 @@ async def refresh_news():
     await notify_clients("news")
 
 
-async def refresh_hackernews():
-    await hackernews.fetch_hackernews()
-    await notify_clients("hackernews")
-
-
 async def refresh_transit():
     await transit.fetch_transit()
     await notify_clients("transit")

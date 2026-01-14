@@ -1,10 +1,18 @@
 import httpx
 import re
 import json
+import asyncio
 from httpx_curl_cffi import AsyncCurlCFFI
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Dict
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 from app.config import CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
@@ -139,6 +147,49 @@ def parse_geojson_feature(feature: dict) -> Dict:
         return parse_garage_data(properties)
     except:
         return None
+
+
+async def scrape_with_selenium(url: str) -> str:
+    """Scrape JavaScript-heavy page using Selenium"""
+    def run_selenium():
+        options = Options()
+        options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--window-size=1920,1080')
+        options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        
+        try:
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+            driver.get(url)
+            
+            # Wait for page to load and JavaScript to execute
+            # Look for parking data elements
+            try:
+                WebDriverWait(driver, 15).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "body"))
+                )
+                # Wait a bit more for JavaScript to load data
+                import time
+                time.sleep(3)
+            except:
+                pass
+            
+            html_content = driver.page_source
+            driver.quit()
+            return html_content
+        except Exception as e:
+            print(f"Selenium error: {e}")
+            try:
+                driver.quit()
+            except:
+                pass
+            return ""
+    
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, run_selenium)
 
 
 def parse_html_element(elem) -> Dict:
@@ -323,20 +374,9 @@ async def fetch_parking() -> dict:
     if garages:
         source = "amsterdam_api"
     else:
-        # Fallback: Try HTML scraping from Maps Amsterdam
+        # Fallback: Try Selenium scraping from Maps Amsterdam (JavaScript-heavy)
         try:
-            async with httpx.AsyncClient(
-                transport=AsyncCurlCFFI(impersonate="chrome110"),
-                timeout=20.0
-            ) as client:
-                response = await client.get(
-                    AMSTERDAM_MAPS_URL,
-                    headers={
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-                    }
-                )
-                html_content = response.text if response.status_code == 200 else ""
+            html_content = await scrape_with_selenium(AMSTERDAM_MAPS_URL)
             
             if html_content:
                 garages = parse_parking_html(html_content)
