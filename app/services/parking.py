@@ -3,6 +3,9 @@ import re
 import json
 import asyncio
 import time
+import os
+import sys
+import shutil
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Dict
@@ -12,9 +15,18 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 from app.config import CACHE_TTL, amsterdam_now
 from app.core.cache import cache
+
+# Only import webdriver_manager on non-Linux (local dev)
+if sys.platform != "linux":
+    try:
+        from webdriver_manager.chrome import ChromeDriverManager
+        HAS_WEBDRIVER_MANAGER = True
+    except ImportError:
+        HAS_WEBDRIVER_MANAGER = False
+else:
+    HAS_WEBDRIVER_MANAGER = False
 
 # Amsterdam parking data sources
 AMSTERDAM_MAPS_URL = "https://maps.amsterdam.nl/parkeergarages_bezetting/"
@@ -149,31 +161,48 @@ def parse_geojson_feature(feature: dict) -> Dict:
 
 def get_chromedriver_path():
     """Get chromedriver path - prefer system install on Linux"""
-    import os
-    import shutil
-
     # Check for system chromedriver first (nixpacks/linux)
     system_paths = [
+        shutil.which("chromedriver"),
         "/usr/bin/chromedriver",
         "/usr/local/bin/chromedriver",
-        shutil.which("chromedriver"),
     ]
     for path in system_paths:
         if path and os.path.exists(path):
+            print(f"Using system chromedriver: {path}")
             return path
 
-    # Fallback to webdriver_manager (local dev)
-    try:
-        return ChromeDriverManager().install()
-    except:
-        return None
+    # Fallback to webdriver_manager (local dev only, not on Linux)
+    if HAS_WEBDRIVER_MANAGER:
+        try:
+            path = ChromeDriverManager().install()
+            print(f"Using webdriver_manager chromedriver: {path}")
+            return path
+        except Exception as e:
+            print(f"webdriver_manager failed: {e}")
+
+    print("No chromedriver found!")
+    return None
+
+
+def get_chromium_path():
+    """Get chromium binary path for Linux/nixpacks"""
+    paths = [
+        shutil.which("chromium"),
+        shutil.which("chromium-browser"),
+        shutil.which("google-chrome"),
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+    ]
+    for path in paths:
+        if path and os.path.exists(path):
+            return path
+    return None
 
 
 async def scrape_with_selenium(url: str) -> List[Dict]:
     """Scrape parking data using Selenium with network interception"""
     def run_selenium():
-        import shutil
-
         options = Options()
         options.add_argument('--headless')
         options.add_argument('--no-sandbox')
@@ -183,8 +212,9 @@ async def scrape_with_selenium(url: str) -> List[Dict]:
         options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36')
 
         # Set chromium binary path for nixpacks/linux
-        chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
+        chromium_path = get_chromium_path()
         if chromium_path:
+            print(f"Using chromium binary: {chromium_path}")
             options.binary_location = chromium_path
 
         # Enable performance logging to capture network requests

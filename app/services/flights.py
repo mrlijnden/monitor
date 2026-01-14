@@ -2,6 +2,9 @@
 import httpx
 import re
 import asyncio
+import os
+import sys
+import shutil
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
@@ -14,6 +17,16 @@ try:
     HAS_CURL_CFFI = True
 except ImportError:
     HAS_CURL_CFFI = False
+
+# Only import webdriver_manager on non-Linux (local dev)
+if sys.platform != "linux":
+    try:
+        from webdriver_manager.chrome import ChromeDriverManager
+        HAS_WEBDRIVER_MANAGER = True
+    except ImportError:
+        HAS_WEBDRIVER_MANAGER = False
+else:
+    HAS_WEBDRIVER_MANAGER = False
 
 # Schiphol URLs
 SCHIPHOL_DEPARTURES_URL = "https://www.schiphol.nl/en/departures/"
@@ -402,25 +415,43 @@ async def fetch_schiphol_api() -> Optional[Dict]:
 
 def get_chromedriver_path():
     """Get chromedriver path - prefer system install on Linux"""
-    import os
-    import shutil
-
     # Check for system chromedriver first (nixpacks/linux)
     system_paths = [
+        shutil.which("chromedriver"),
         "/usr/bin/chromedriver",
         "/usr/local/bin/chromedriver",
-        shutil.which("chromedriver"),
     ]
     for path in system_paths:
         if path and os.path.exists(path):
+            print(f"Using system chromedriver: {path}")
             return path
 
-    # Fallback to webdriver_manager (local dev)
-    try:
-        from webdriver_manager.chrome import ChromeDriverManager
-        return ChromeDriverManager().install()
-    except:
-        return None
+    # Fallback to webdriver_manager (local dev only, not on Linux)
+    if HAS_WEBDRIVER_MANAGER:
+        try:
+            path = ChromeDriverManager().install()
+            print(f"Using webdriver_manager chromedriver: {path}")
+            return path
+        except Exception as e:
+            print(f"webdriver_manager failed: {e}")
+
+    print("No chromedriver found!")
+    return None
+
+
+def get_chromium_path():
+    """Get chromium binary path for Linux/nixpacks"""
+    paths = [
+        shutil.which("chromium"),
+        shutil.which("chromium-browser"),
+        shutil.which("google-chrome"),
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+    ]
+    for path in paths:
+        if path and os.path.exists(path):
+            return path
+    return None
 
 
 async def scrape_flightradar24_with_selenium() -> str:
@@ -442,9 +473,9 @@ async def scrape_flightradar24_with_selenium() -> str:
         options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
 
         # Set chromium binary path for nixpacks/linux
-        import shutil
-        chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
+        chromium_path = get_chromium_path()
         if chromium_path:
+            print(f"Using chromium binary: {chromium_path}")
             options.binary_location = chromium_path
 
         try:
