@@ -1045,6 +1045,22 @@ body.has-ticker .dashboard {
     color: black;
 }
 
+.panel-flights .panel-content {
+    padding: 0 !important;
+    overflow: hidden;
+}
+
+.flightradar-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 200px;
+}
+
+.flightradar-overlay {
+    pointer-events: none;
+}
+
 /* Emergency icon markers */
 .emergency-div-icon {
     background: transparent !important;

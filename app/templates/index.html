@@ -73,16 +73,25 @@
         </div>
 
         <!-- Schiphol Flights Panel -->
-        <div class="panel" id="panel-flights">
+        <div class="panel panel-flights" id="panel-flights">
             <div class="panel-header">
-                <span class="panel-title">Schiphol</span>
+                <span class="panel-title">Flightradar24</span>
                 <span class="panel-badge flight">AMS</span>
             </div>
-            <div class="panel-content"
-                 hx-get="/partial/flights"
-                 hx-trigger="load, every 120s"
-                 hx-swap="innerHTML">
-                <div class="loading">Loading flights...</div>
+            <div class="panel-content" style="padding: 0; position: relative;">
+                <div class="flightradar-container" style="width: 100%; height: 100%; position: relative;">
+                    <iframe 
+                        src="https://www.flightradar24.com/simple_index.php?lat=52.3676&lon=4.9041&z=11"
+                        width="100%" 
+                        height="100%" 
+                        frameborder="0"
+                        style="border: none; display: block;"
+                        allowfullscreen>
+                    </iframe>
+                    <div class="flightradar-overlay" style="position: absolute; top: 5px; right: 5px; background: rgba(0, 0, 0, 0.8); padding: 4px 8px; border-radius: 3px; font-size: 8px; color: var(--text-muted); z-index: 1000; pointer-events: none;">
+                        <span class="status-dot online" style="margin-right: 4px;"></span>LIVE
+                    </div>
+                </div>
             </div>
         </div>
 
