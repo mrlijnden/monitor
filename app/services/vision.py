@@ -481,6 +481,40 @@ def draw_bounding_boxes(image_bytes: bytes, objects: List[Dict], image_size: Tup
         return image_bytes
 
 
+def generate_placeholder_image(camera_id: str) -> Optional[bytes]:
+    """Generate a placeholder image when frame extraction fails"""
+    try:
+        # Create a dark placeholder image
+        img = Image.new('RGB', (640, 360), color=(10, 10, 10))
+        draw = ImageDraw.Draw(img)
+
+        # Try to load font
+        try:
+            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 20)
+            small_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 12)
+        except:
+            font = ImageFont.load_default()
+            small_font = font
+
+        # Draw text
+        text = "NO SIGNAL"
+        draw.text((280, 160), text, fill=(0, 204, 204), font=font)
+        draw.text((250, 200), f"Camera: {camera_id}", fill=(100, 100, 100), font=small_font)
+        draw.text((220, 220), "Waiting for frame extraction...", fill=(60, 60, 60), font=small_font)
+
+        # Draw border
+        draw.rectangle([0, 0, 639, 359], outline=(0, 204, 204), width=2)
+
+        # Convert to bytes
+        output = io.BytesIO()
+        img.save(output, format='JPEG', quality=85)
+        output.seek(0)
+        return output.getvalue()
+    except Exception as e:
+        print(f"Error generating placeholder: {e}")
+        return None
+
+
 async def get_annotated_frame(camera_id: str) -> Optional[bytes]:
     """Get cached annotated frame or return None if not available"""
     cache_key = f"vision_image_{camera_id}"
@@ -518,7 +552,10 @@ async def refresh_annotated_frame(camera_id: str) -> Optional[bytes]:
                 image_bytes = response.content
 
     if not image_bytes:
-        return None
+        # Generate placeholder image
+        image_bytes = generate_placeholder_image(camera_id)
+        if not image_bytes:
+            return None
 
     # Detect objects
     objects = await detect_objects_huggingface(image_bytes)
