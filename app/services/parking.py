@@ -2,7 +2,7 @@ import httpx
 import re
 import json
 import asyncio
-from httpx_curl_cffi import AsyncCurlTransport
+import time
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Dict
@@ -17,8 +17,6 @@ from app.config import CACHE_TTL, amsterdam_now
 from app.core.cache import cache
 
 # Amsterdam parking data sources
-AMSTERDAM_PARKING_LOCATIONS_URL = "http://open.data.amsterdam.nl/ivv/parkeren/locaties.json"
-AMSTERDAM_PARKING_API_URL = "https://api.data.amsterdam.nl/parkeergarages/"
 AMSTERDAM_MAPS_URL = "https://maps.amsterdam.nl/parkeergarages_bezetting/"
 
 def parse_parking_html(html_content: str) -> List[Dict]:
@@ -149,8 +147,8 @@ def parse_geojson_feature(feature: dict) -> Dict:
         return None
 
 
-async def scrape_with_selenium(url: str) -> str:
-    """Scrape JavaScript-heavy page using Selenium"""
+async def scrape_with_selenium(url: str) -> List[Dict]:
+    """Scrape parking data using Selenium with network interception"""
     def run_selenium():
         options = Options()
         options.add_argument('--headless')
@@ -158,38 +156,107 @@ async def scrape_with_selenium(url: str) -> str:
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--disable-gpu')
         options.add_argument('--window-size=1920,1080')
-        options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-        
+        options.add_argument('user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36')
+
+        # Enable performance logging to capture network requests
+        options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
+
+        garages = []
+        driver = None
+
         try:
             service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=options)
+
+            print("Opening Amsterdam parking page...")
             driver.get(url)
-            
-            # Wait for page to load and JavaScript to execute
-            # Look for parking data elements
-            try:
-                WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.TAG_NAME, "body"))
-                )
-                # Wait a bit more for JavaScript to load data
-                import time
-                time.sleep(3)
-            except:
-                pass
-            
-            html_content = driver.page_source
-            driver.quit()
-            return html_content
+
+            # Wait for page to load
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+
+            # Wait for JavaScript to load data
+            time.sleep(5)
+
+            # Get performance logs to find network responses
+            logs = driver.get_log('performance')
+
+            # Look for parking data in ALL network responses (multiple layers)
+            seen_names = set()
+            for log in logs:
+                try:
+                    message = json.loads(log['message'])['message']
+                    method = message.get('method', '')
+
+                    if method == 'Network.responseReceived':
+                        params = message.get('params', {})
+                        request_id = params.get('requestId')
+                        response_url = params.get('response', {}).get('url', '')
+
+                        # Check if this is the WFS endpoint with parking data
+                        if 'haal.objecten.wfs.php' in response_url or 'haal.objecten.php' in response_url:
+                            try:
+                                body = driver.execute_cdp_cmd('Network.getResponseBody', {'requestId': request_id})
+                                body_text = body.get('body', '')
+
+                                if body_text and 'FreeSpaceShort' in body_text:
+                                    data = json.loads(body_text)
+                                    if isinstance(data, list):
+                                        for item in data:
+                                            if isinstance(item, dict) and 'FreeSpaceShort' in item:
+                                                garage = parse_maps_garage(item)
+                                                if garage and garage['name'] not in seen_names:
+                                                    garages.append(garage)
+                                                    seen_names.add(garage['name'])
+                            except Exception:
+                                continue
+                except Exception:
+                    continue
+
+            if garages:
+                print(f"Found {len(garages)} parking garages from network")
+
+            return garages
+
         except Exception as e:
             print(f"Selenium error: {e}")
-            try:
-                driver.quit()
-            except:
-                pass
-            return ""
-    
+            return []
+        finally:
+            if driver:
+                try:
+                    driver.quit()
+                except:
+                    pass
+
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, run_selenium)
+
+
+def parse_maps_garage(item: dict) -> Dict:
+    """Parse garage data from Amsterdam Maps API response"""
+    try:
+        name = item.get('V') or item.get('L') or 'Unknown'
+        free_spaces = item.get('FreeSpaceShort')
+        capacity = item.get('ShortCapacity')
+
+        if capacity and capacity > 0 and free_spaces is not None:
+            occupied = capacity - free_spaces
+            occupancy = int((occupied / capacity) * 100) if capacity > 0 else 0
+
+            return {
+                "name": name,
+                "capacity": capacity,
+                "free_spaces": free_spaces,
+                "occupied": occupied,
+                "occupancy": occupancy,
+                "lat": item.get('T'),
+                "lng": item.get('G')
+            }
+    except Exception as e:
+        print(f"Error parsing garage: {e}")
+
+    return None
 
 
 def parse_html_element(elem) -> Dict:
@@ -368,27 +435,18 @@ async def fetch_parking() -> dict:
     """Fetch Amsterdam parking garage availability."""
     garages = []
     source = None
-    
-    # First try official Amsterdam Open Data API
-    garages = await fetch_parking_from_api()
-    if garages:
-        source = "amsterdam_api"
-    else:
-        # Fallback: Try Selenium scraping from Maps Amsterdam (JavaScript-heavy)
-        try:
-            html_content = await scrape_with_selenium(AMSTERDAM_MAPS_URL)
-            
-            if html_content:
-                garages = parse_parking_html(html_content)
-                if garages:
-                    print(f"Scraped {len(garages)} parking garages from Amsterdam Maps")
-                    source = "amsterdam_maps"
-        
-        except Exception as e:
-            print(f"Error fetching parking data: {e}")
-    
+
+    # Use Selenium to scrape from Maps Amsterdam with network interception
+    try:
+        garages = await scrape_with_selenium(AMSTERDAM_MAPS_URL)
+        if garages:
+            print(f"Fetched {len(garages)} parking garages from Amsterdam Maps")
+            source = "amsterdam_maps"
+    except Exception as e:
+        print(f"Error fetching parking data: {e}")
+
     result = {
-        "garages": garages[:20],  # Limit to top 20
+        "garages": garages[:30],  # Limit to top 30
         "source": source,
         "updated_at": amsterdam_now().isoformat(),
         "updated": amsterdam_now().strftime("%H:%M:%S"),

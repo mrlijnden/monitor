@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from app.services import weather, news, transit, events, air_quality, markets
@@ -205,3 +205,12 @@ async def partial_vision_detection(request: Request, camera_id: str):
     """Get vision detection HTML partial"""
     data = await vision.get_camera_detections(camera_id)
     return templates.TemplateResponse("partials/vision_detection.html", {"request": request, "detection": data})
+
+
+@router.get("/api/vision/{camera_id}/image")
+async def api_vision_image(camera_id: str):
+    """Get camera frame with bounding boxes drawn on detected objects"""
+    image_bytes = await vision.get_annotated_frame(camera_id)
+    if image_bytes:
+        return Response(content=image_bytes, media_type="image/jpeg")
+    return Response(content=b"", status_code=404)

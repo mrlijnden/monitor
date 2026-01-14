@@ -61,6 +61,11 @@ async def refresh_flights():
     await notify_clients("flights")
 
 
+async def refresh_vision():
+    await vision.fetch_vision()
+    await notify_clients("vision")
+
+
 async def notify_clients(panel: str):
     """Notify all SSE clients about an update."""
     for queue in list(sse_clients):

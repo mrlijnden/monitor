@@ -5,17 +5,31 @@ import asyncio
 import subprocess
 import tempfile
 import os
-from typing import List, Dict, Optional
+import io
+from typing import List, Dict, Optional, Tuple
 from datetime import datetime
+from PIL import Image, ImageDraw, ImageFont
 from app.config import amsterdam_now, CACHE_TTL
 from app.core.cache import cache
+
+# Colors for bounding boxes (RGB)
+BBOX_COLORS = [
+    (255, 107, 107),  # Red
+    (78, 205, 196),   # Cyan
+    (255, 230, 109),  # Yellow
+    (170, 166, 255),  # Purple
+    (255, 154, 162),  # Pink
+    (144, 238, 144),  # Light green
+    (255, 179, 71),   # Orange
+    (135, 206, 235),  # Sky blue
+]
 
 # Google Cloud Vision API (optional - requires API key)
 GOOGLE_VISION_API_URL = "https://vision.googleapis.com/v1/images:annotate"
 GOOGLE_VISION_API_KEY = None  # Set via GOOGLE_VISION_API_KEY env var
 
-# Alternative: Use Hugging Face Inference API (free tier available)
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/facebook/detr-resnet-50"
+# Hugging Face Inference API (requires free API key from huggingface.co/settings/tokens)
+HUGGINGFACE_API_URL = "https://router.huggingface.co/hf-inference/models/facebook/detr-resnet-50"
 HUGGINGFACE_API_KEY = None  # Set via HUGGINGFACE_API_KEY env var
 
 # Alternative: Use Roboflow API (free tier)
@@ -73,27 +87,31 @@ async def detect_objects_google_vision(image_bytes: bytes) -> List[Dict]:
 
 
 async def detect_objects_huggingface(image_bytes: bytes) -> List[Dict]:
-    """Detect objects using Hugging Face Inference API (free tier)"""
+    """Detect objects using Hugging Face Inference API (requires free API key)"""
     import os
     api_key = os.getenv("HUGGINGFACE_API_KEY")
-    
+
+    if not api_key:
+        # API key required - get one free at huggingface.co/settings/tokens
+        return []
+
     try:
-        headers = {}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-        
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "image/jpeg"
+        }
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 HUGGINGFACE_API_URL,
                 headers=headers,
-                data=image_bytes,
-                content_type="image/jpeg"
+                content=image_bytes
             )
-            
+
             if response.status_code == 200:
                 data = response.json()
                 objects = []
-                
+
                 if isinstance(data, list):
                     for item in data:
                         objects.append({
@@ -101,15 +119,28 @@ async def detect_objects_huggingface(image_bytes: bytes) -> List[Dict]:
                             "score": item.get('score', 0),
                             "box": item.get('box', {})
                         })
-                
+
                 return objects
             elif response.status_code == 503:
-                # Model is loading, wait and retry
+                # Model is loading, wait and retry once
+                print("Hugging Face model loading, waiting...")
                 await asyncio.sleep(5)
-                return await detect_objects_huggingface(image_bytes)
+                response = await client.post(
+                    HUGGINGFACE_API_URL,
+                    headers=headers,
+                    content=image_bytes
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if isinstance(data, list):
+                        return [{"label": item.get('label', 'Unknown'), "score": item.get('score', 0), "box": item.get('box', {})} for item in data]
+            elif response.status_code == 401:
+                print("Hugging Face API: Invalid or missing API key")
+            else:
+                print(f"Hugging Face API error: {response.status_code}")
     except Exception as e:
         print(f"Hugging Face API error: {e}")
-    
+
     return []
 
 
@@ -295,13 +326,152 @@ async def get_camera_detections(camera_id: str) -> Dict:
     """Get cached or fresh detections for a camera"""
     cache_key = f"vision_{camera_id}"
     cached = cache.get(cache_key)
-    
+
     if cached:
         return cached
-    
+
     # Fetch fresh detection
     detection = await detect_camera_objects(camera_id)
-    
+
     # Cache for 60 seconds
     cache.set(cache_key, detection, 60)
     return detection
+
+
+async def fetch_vision() -> Dict:
+    """Fetch vision detections for all cameras and cache results"""
+    from app.services import cameras
+
+    camera_list = cameras.get_camera_list()
+    all_detections = []
+
+    for cam in camera_list:
+        try:
+            detection = await detect_camera_objects(cam["id"])
+            all_detections.append(detection)
+            # Cache individual detection
+            cache.set(f"vision_{cam['id']}", detection, CACHE_TTL.get("vision", 300))
+        except Exception as e:
+            print(f"Error detecting objects for camera {cam['id']}: {e}")
+
+    result = {
+        "detections": all_detections,
+        "updated": amsterdam_now().strftime("%H:%M:%S"),
+        "camera_count": len(all_detections)
+    }
+
+    cache.set("vision", result, CACHE_TTL.get("vision", 300))
+    return result
+
+
+def draw_bounding_boxes(image_bytes: bytes, objects: List[Dict], image_size: Tuple[int, int] = None) -> bytes:
+    """Draw bounding boxes on an image and return the annotated image as bytes"""
+    try:
+        # Open image
+        image = Image.open(io.BytesIO(image_bytes))
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+
+        draw = ImageDraw.Draw(image)
+        width, height = image.size
+
+        # Try to load a font, fall back to default
+        try:
+            font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
+            small_font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 11)
+        except:
+            font = ImageFont.load_default()
+            small_font = font
+
+        # Track labels for color assignment
+        label_colors = {}
+        color_index = 0
+
+        for obj in objects:
+            label = obj.get('label') or obj.get('name', 'Unknown')
+            score = obj.get('score', 0)
+            box = obj.get('box', {})
+
+            # Skip low confidence detections
+            if score < 0.4:
+                continue
+
+            # Get bounding box coordinates
+            if isinstance(box, dict) and 'xmin' in box:
+                xmin = box.get('xmin', 0)
+                ymin = box.get('ymin', 0)
+                xmax = box.get('xmax', 0)
+                ymax = box.get('ymax', 0)
+            else:
+                continue
+
+            # Assign color to label
+            if label not in label_colors:
+                label_colors[label] = BBOX_COLORS[color_index % len(BBOX_COLORS)]
+                color_index += 1
+
+            color = label_colors[label]
+
+            # Draw bounding box
+            draw.rectangle([xmin, ymin, xmax, ymax], outline=color, width=2)
+
+            # Draw label background
+            label_text = f"{label} {score:.0%}"
+            bbox = draw.textbbox((xmin, ymin - 20), label_text, font=small_font)
+            draw.rectangle([bbox[0] - 2, bbox[1] - 2, bbox[2] + 2, bbox[3] + 2], fill=color)
+
+            # Draw label text
+            draw.text((xmin, ymin - 20), label_text, fill=(0, 0, 0), font=small_font)
+
+        # Convert back to bytes
+        output = io.BytesIO()
+        image.save(output, format='JPEG', quality=85)
+        output.seek(0)
+        return output.getvalue()
+
+    except Exception as e:
+        print(f"Error drawing bounding boxes: {e}")
+        return image_bytes
+
+
+async def get_annotated_frame(camera_id: str) -> Optional[bytes]:
+    """Get a camera frame with bounding boxes drawn on detected objects"""
+    from app.services import cameras
+
+    # Get camera info
+    camera_list = cameras.get_camera_list()
+    camera_info = next((cam for cam in camera_list if cam["id"] == camera_id), None)
+
+    if not camera_info:
+        return None
+
+    video_id = camera_info.get("video_id")
+    image_url = camera_info.get("url")
+
+    # Get image from source
+    image_bytes = None
+    if video_id:
+        import random
+        timestamp = random.randint(3, 10)
+        image_bytes = await extract_youtube_frame(video_id, timestamp=timestamp)
+    elif image_url:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(image_url)
+            if response.status_code == 200:
+                image_bytes = response.content
+
+    if not image_bytes:
+        return None
+
+    # Detect objects
+    objects = await detect_objects_huggingface(image_bytes)
+    if not objects:
+        objects = await detect_objects_google_vision(image_bytes)
+
+    if not objects:
+        # Return original image if no detections
+        return image_bytes
+
+    # Draw bounding boxes
+    annotated_image = draw_bounding_boxes(image_bytes, objects)
+    return annotated_image
