@@ -24,6 +24,13 @@
             {{ cam.name }} - {{ cam.location }}
             <span style="float: right; font-size: 8px; color: #ff0000;">● LIVE</span>
         </div>
+        <div class="camera-detections" id="camera-detections{{ suffix }}" 
+             hx-get="/partial/vision/{{ cam.id }}"
+             hx-trigger="load, every 60s"
+             hx-swap="innerHTML"
+             style="position: absolute; bottom: 5px; left: 5px; background: rgba(0, 0, 0, 0.85); padding: 4px 8px; border-radius: 3px; font-size: 8px; color: var(--text-muted); max-width: 200px; border: 1px solid rgba(0, 204, 204, 0.3);">
+            <div class="loading" style="font-size: 7px;">Analyzing...</div>
+        </div>
     </div>
     <button class="camera-nav prev" onclick="prevCamera{{ suffix }}()">&lt;</button>
     <button class="camera-nav next" onclick="nextCamera{{ suffix }}()">&gt;</button>

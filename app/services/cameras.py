@@ -10,6 +10,7 @@ AMSTERDAM_CAMERAS = [
         "location": "Centrum",
         "type": "youtube",
         "embed": "https://www.youtube.com/embed/Gd9d4q6WvUY?autoplay=1&mute=1",  # Dam Square 24/7 live
+        "video_id": "Gd9d4q6WvUY",
     },
     {
         "id": "centraal",
@@ -17,6 +18,7 @@ AMSTERDAM_CAMERAS = [
         "location": "Centrum",
         "type": "youtube",
         "embed": "https://www.youtube.com/embed/2tgHBRFHMm8?autoplay=1&mute=1",  # Centraal Station live
+        "video_id": "2tgHBRFHMm8",
     },
     {
         "id": "live3",
@@ -24,6 +26,7 @@ AMSTERDAM_CAMERAS = [
         "location": "Amsterdam",
         "type": "youtube",
         "embed": "https://www.youtube.com/embed/9Pm6Ji6tm7s?autoplay=1&mute=1",  # Live camera feed
+        "video_id": "9Pm6Ji6tm7s",
     },
 ]
 
@@ -55,6 +58,7 @@ async def get_cameras_data(panel_index: int = 0) -> Dict:
             "type": cam.get("type", "youtube"),
             "embed": cam.get("embed"),
             "image": cam.get("url"),
+            "video_id": cam.get("video_id"),
             "refresh": cam.get("refresh", 0)
         })
 

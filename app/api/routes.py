@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from app.services import weather, news, transit, events, air_quality, markets
 from app.services import parking, trains, bikes
-from app.services import emergency, cameras, flights, ticker, map_data
+from app.services import emergency, cameras, flights, ticker, map_data, vision
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -192,3 +192,16 @@ async def api_map_vehicles():
 async def api_map_markers():
     """Get map markers (landmarks, incidents)"""
     return await map_data.get_map_markers()
+
+
+@router.get("/api/vision/{camera_id}")
+async def api_vision_detection(camera_id: str):
+    """Get object detection results for a camera"""
+    return await vision.get_camera_detections(camera_id)
+
+
+@router.get("/partial/vision/{camera_id}", response_class=HTMLResponse)
+async def partial_vision_detection(request: Request, camera_id: str):
+    """Get vision detection HTML partial"""
+    data = await vision.get_camera_detections(camera_id)
+    return templates.TemplateResponse("partials/vision_detection.html", {"request": request, "detection": data})

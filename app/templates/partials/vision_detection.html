@@ -1,0 +1,18 @@
+{% if detection and detection.objects %}
+<div class="vision-detection">
+    <div style="font-size: 7px; color: var(--accent-cyan); margin-bottom: 2px;">AI DETECTION</div>
+    {% if detection.summary %}
+    {% for label, count in detection.summary.items() %}
+    <div style="font-size: 7px; margin: 1px 0;">
+        <span style="color: var(--accent-yellow);">{{ label|upper }}</span>: 
+        <span style="color: var(--text-secondary);">{{ count }}</span>
+    </div>
+    {% endfor %}
+    {% endif %}
+    <div style="font-size: 6px; color: var(--text-dim); margin-top: 3px;">
+        {{ detection.detection_count }} objects | {{ detection.source|upper if detection.source else 'N/A' }}
+    </div>
+</div>
+{% else %}
+<div style="font-size: 7px; color: var(--text-dim);">No detections</div>
+{% endif %}
