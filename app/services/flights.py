@@ -2,19 +2,18 @@
 import httpx
 import re
 import asyncio
-from httpx_curl_cffi import AsyncCurlTransport
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
 from app.config import amsterdam_now, CACHE_TTL
 from app.core.cache import cache
+
+# Try to import curl transport for better scraping
+try:
+    from httpx_curl_cffi import AsyncCurlTransport
+    HAS_CURL_CFFI = True
+except ImportError:
+    HAS_CURL_CFFI = False
 
 # Schiphol URLs
 SCHIPHOL_DEPARTURES_URL = "https://www.schiphol.nl/en/departures/"
@@ -401,9 +400,39 @@ async def fetch_schiphol_api() -> Optional[Dict]:
     return None
 
 
+def get_chromedriver_path():
+    """Get chromedriver path - prefer system install on Linux"""
+    import os
+    import shutil
+
+    # Check for system chromedriver first (nixpacks/linux)
+    system_paths = [
+        "/usr/bin/chromedriver",
+        "/usr/local/bin/chromedriver",
+        shutil.which("chromedriver"),
+    ]
+    for path in system_paths:
+        if path and os.path.exists(path):
+            return path
+
+    # Fallback to webdriver_manager (local dev)
+    try:
+        from webdriver_manager.chrome import ChromeDriverManager
+        return ChromeDriverManager().install()
+    except:
+        return None
+
+
 async def scrape_flightradar24_with_selenium() -> str:
     """Scrape Flightradar24 page using Selenium for JavaScript rendering"""
     def run_selenium():
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+
         options = Options()
         options.add_argument('--headless')
         options.add_argument('--no-sandbox')
@@ -411,9 +440,19 @@ async def scrape_flightradar24_with_selenium() -> str:
         options.add_argument('--disable-gpu')
         options.add_argument('--window-size=1920,1080')
         options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-        
+
+        # Set chromium binary path for nixpacks/linux
+        import shutil
+        chromium_path = shutil.which("chromium") or shutil.which("chromium-browser")
+        if chromium_path:
+            options.binary_location = chromium_path
+
         try:
-            service = Service(ChromeDriverManager().install())
+            driver_path = get_chromedriver_path()
+            if driver_path:
+                service = Service(driver_path)
+            else:
+                service = Service()
             driver = webdriver.Chrome(service=service, options=options)
             driver.get(FLIGHTRADAR24_AMS_URL)
             
