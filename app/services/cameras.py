@@ -32,8 +32,12 @@ WEBCAM_IMAGES = [
     },
 ]
 
-async def get_cameras_data() -> Dict:
-    """Get available camera feeds"""
+async def get_cameras_data(panel_index: int = 0) -> Dict:
+    """Get available camera feeds for a specific panel
+    
+    Args:
+        panel_index: 0 for first panel, 1 for second panel
+    """
     cameras = []
 
     for cam in AMSTERDAM_CAMERAS:
@@ -47,11 +51,15 @@ async def get_cameras_data() -> Dict:
             "refresh": cam.get("refresh", 0)
         })
 
+    # For second panel, start at a different camera index
+    start_index = panel_index if panel_index < len(cameras) else 0
+
     return {
         "cameras": cameras,
-        "current_index": 0,
+        "current_index": start_index,
         "auto_rotate": True,
-        "rotate_interval": 30  # seconds (longer for video streams)
+        "rotate_interval": 30,  # seconds (longer for video streams)
+        "panel_id": f"panel-cameras{panel_index + 1 if panel_index > 0 else ''}"
     }
 
 def get_camera_list() -> List[Dict]:

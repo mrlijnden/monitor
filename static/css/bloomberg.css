@@ -1148,3 +1148,157 @@ body.has-ticker .dashboard {
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 11px;
 }
+
+/* P2000 Postcode Notifications */
+.notification-popup {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    background: rgba(17, 17, 17, 0.98);
+    border: 2px solid var(--accent-red);
+    border-radius: 4px;
+    padding: 15px 20px;
+    min-width: 300px;
+    max-width: 400px;
+    z-index: 10000;
+    box-shadow: 0 0 20px rgba(255, 51, 51, 0.5);
+    animation: slideInRight 0.3s ease-out;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.notification-popup.hide {
+    animation: slideOutRight 0.3s ease-out forwards;
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+}
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.notification-icon {
+    font-size: 24px;
+    margin-right: 10px;
+}
+
+.notification-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--accent-red);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.notification-close {
+    margin-left: auto;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 5px;
+}
+
+.notification-close:hover {
+    color: var(--text-secondary);
+}
+
+.notification-body {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 8px;
+}
+
+.notification-postcode {
+    display: inline-block;
+    background: var(--accent-red);
+    color: var(--text-secondary);
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-weight: bold;
+    margin: 0 4px;
+}
+
+.notification-location {
+    color: var(--accent-yellow);
+    font-weight: bold;
+}
+
+.notification-time {
+    font-size: 9px;
+    color: var(--text-muted);
+    margin-top: 5px;
+}
+
+/* Postcode Config */
+.postcode-config {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(17, 17, 17, 0.95);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 10px 15px;
+    font-size: 10px;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.postcode-config input {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 4px 8px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 11px;
+    width: 80px;
+    text-transform: uppercase;
+}
+
+.postcode-config input:focus {
+    outline: none;
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 5px rgba(0, 204, 204, 0.3);
+}
+
+.postcode-config button {
+    background: var(--accent-cyan);
+    color: var(--text-secondary);
+    border: none;
+    padding: 4px 10px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 10px;
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+.postcode-config button:hover {
+    background: var(--accent-blue);
+}
+}

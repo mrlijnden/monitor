@@ -36,7 +36,6 @@ NEWS_FEEDS = [
 REFRESH_INTERVALS = {
     "weather": 1800,      # 30 minutes
     "news": 600,          # 10 minutes
-    "hackernews": 600,    # 10 minutes
     "transit": 60,        # 1 minute
     "trains": 120,        # 2 minutes
     "events": 3600,       # 1 hour
@@ -51,7 +50,6 @@ REFRESH_INTERVALS = {
 CACHE_TTL = {
     "weather": 2000,
     "news": 700,
-    "hackernews": 700,
     "transit": 90,
     "trains": 150,
     "events": 4000,

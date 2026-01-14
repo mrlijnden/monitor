@@ -157,122 +157,127 @@ def parse_schiphol_html(html_content: str, flight_type: str = "departure") -> Li
     except Exception as e:
         print(f"Error parsing Schiphol HTML: {e}")
     
-    return flights[:15]  # Limit to 15 flights
+    # If we already found flights, return early
+    if flights:
+        return flights[:15]
     
     # Look for JSON data embedded in script tags
     # Schiphol often loads flight data via JavaScript/JSON
-    script_pattern = r'<script[^>]*>(.*?)</script>'
-    scripts = re.findall(script_pattern, html_content, re.DOTALL | re.IGNORECASE)
-    
-    for script in scripts:
-        # Look for flight data in JSON format
-        if "flight" in script.lower() or "departure" in script.lower() or "arrival" in script.lower():
-            # Try to extract JSON objects
-            json_patterns = [
-                r'\{[^{}]*"flightNumber"[^{}]*\}',
-                r'\{[^{}]*"destination"[^{}]*\}',
-                r'flights\s*[:=]\s*\[(.*?)\]',
-            ]
-            
-            for pattern in json_patterns:
-                matches = re.findall(pattern, script, re.DOTALL | re.IGNORECASE)
-                for match in matches[:20]:
-                    try:
-                        import json
-                        # Try to parse as JSON
-                        if match.strip().startswith('{'):
-                            data = json.loads(match)
-                            # Extract flight info
-                            flight_code = data.get("flightNumber") or data.get("flight")
-                            if flight_code:
-                                flights.append({
-                                    "code": str(flight_code),
-                                    "airline": str(flight_code)[:2] if len(str(flight_code)) >= 2 else "Unknown",
-                                    "destination": data.get("destination", {}).get("city", "") if isinstance(data.get("destination"), dict) else data.get("destination", "Unknown"),
-                                    "time": data.get("time", ""),
-                                    "status": data.get("status", "on-time"),
-                                    "delay": data.get("delay"),
-                                    "gate": data.get("gate"),
-                                    "terminal": data.get("terminal")
-                                })
-                    except:
-                        continue
+    try:
+        script_pattern = r'<script[^>]*>(.*?)</script>'
+        scripts = re.findall(script_pattern, html_content, re.DOTALL | re.IGNORECASE)
+        
+        for script in scripts:
+            # Look for flight data in JSON format
+            if "flight" in script.lower() or "departure" in script.lower() or "arrival" in script.lower():
+                # Try to extract JSON objects
+                json_patterns = [
+                    r'\{[^{}]*"flightNumber"[^{}]*\}',
+                    r'\{[^{}]*"destination"[^{}]*\}',
+                    r'flights\s*[:=]\s*\[(.*?)\]',
+                ]
+                
+                for pattern in json_patterns:
+                    matches = re.findall(pattern, script, re.DOTALL | re.IGNORECASE)
+                    for match in matches[:20]:
+                        try:
+                            import json
+                            # Try to parse as JSON
+                            if match.strip().startswith('{'):
+                                data = json.loads(match)
+                                # Extract flight info
+                                flight_code = data.get("flightNumber") or data.get("flight")
+                                if flight_code:
+                                    flights.append({
+                                        "code": str(flight_code),
+                                        "airline": str(flight_code)[:2] if len(str(flight_code)) >= 2 else "Unknown",
+                                        "destination": data.get("destination", {}).get("city", "") if isinstance(data.get("destination"), dict) else data.get("destination", "Unknown"),
+                                        "time": data.get("time", ""),
+                                        "status": data.get("status", "on-time"),
+                                        "delay": data.get("delay"),
+                                        "gate": data.get("gate"),
+                                        "terminal": data.get("terminal")
+                                    })
+                        except:
+                            continue
+    except Exception as e:
+        print(f"Error parsing JSON from scripts: {e}")
     
     # Also try to find flight data in HTML tables/divs
     # Look for common patterns: flight numbers, times, destinations
-    flight_number_pattern = r'\b([A-Z]{2,3}\s*\d{2,4})\b'
-    flight_numbers = re.findall(flight_number_pattern, html_content)
-    
-    # Look for time patterns near flight numbers
-    time_pattern = r'(\d{1,2}):(\d{2})'
-    times = re.findall(time_pattern, html_content)
-    
-    # Try to match flight numbers with times and destinations
-    # This is a fallback if JSON parsing doesn't work
-    if not flights and flight_numbers:
-        # Extract structured data from HTML
-        # Look for flight rows/items
-        flight_item_patterns = [
-            r'<div[^>]*class="[^"]*flight[^"]*"[^>]*>(.*?)</div>',
-            r'<tr[^>]*>(.*?)</tr>',
-            r'<li[^>]*data-flight[^>]*>(.*?)</li>',
-        ]
-        
-        for pattern in flight_item_patterns:
-            items = re.findall(pattern, html_content, re.DOTALL | re.IGNORECASE)
-            for item in items[:20]:
-                # Extract flight number
-                fn_match = re.search(flight_number_pattern, item)
-                if not fn_match:
-                    continue
-                
-                flight_code = fn_match.group(1).strip()
-                
-                # Extract time
-                time_match = re.search(time_pattern, item)
-                time_str = time_match.group(0) if time_match else None
-                
-                # Extract destination (look for city names or airport codes)
-                dest_patterns = [
-                    r'<span[^>]*class="[^"]*destination[^"]*"[^>]*>(.*?)</span>',
-                    r'<td[^>]*class="[^"]*destination[^"]*"[^>]*>(.*?)</td>',
-                    r'\b([A-Z]{3})\b',  # Airport code
-                ]
-                
-                destination = "Unknown"
-                for dp in dest_patterns:
-                    dest_match = re.search(dp, item, re.IGNORECASE)
-                    if dest_match:
-                        destination = re.sub(r'<[^>]+>', '', dest_match.group(1)).strip()
-                        if len(destination) > 2:
-                            break
-                
-                # Extract status
-                status = "on-time"
-                item_lower = item.lower()
-                if "delayed" in item_lower or "delay" in item_lower:
-                    status = "delayed"
-                elif "boarding" in item_lower:
-                    status = "boarding"
-                elif "departed" in item_lower or "left" in item_lower:
-                    status = "departed"
-                elif "cancelled" in item_lower or "canceled" in item_lower:
-                    status = "cancelled"
-                
-                if flight_code and time_str:
-                    flights.append({
-                        "code": flight_code.replace(" ", ""),
-                        "airline": flight_code[:2] if len(flight_code) >= 2 else "Unknown",
-                        "destination": destination,
-                        "time": time_str,
-                        "status": status,
-                        "delay": None,
-                        "gate": None,
-                        "terminal": None
-                    })
+    if not flights:
+        try:
+            flight_number_pattern = r'\b([A-Z]{2,3}\s*\d{2,4})\b'
+            flight_numbers = re.findall(flight_number_pattern, html_content)
             
-            if flights:
-                break
+            # Look for time patterns near flight numbers
+            time_pattern = r'(\d{1,2}):(\d{2})'
+            
+            # Extract structured data from HTML
+            # Look for flight rows/items
+            flight_item_patterns = [
+                r'<div[^>]*class="[^"]*flight[^"]*"[^>]*>(.*?)</div>',
+                r'<tr[^>]*>(.*?)</tr>',
+                r'<li[^>]*data-flight[^>]*>(.*?)</li>',
+            ]
+            
+            for pattern in flight_item_patterns:
+                items = re.findall(pattern, html_content, re.DOTALL | re.IGNORECASE)
+                for item in items[:20]:
+                    # Extract flight number
+                    fn_match = re.search(flight_number_pattern, item)
+                    if not fn_match:
+                        continue
+                    
+                    flight_code = fn_match.group(1).strip()
+                    
+                    # Extract time
+                    time_match = re.search(time_pattern, item)
+                    time_str = time_match.group(0) if time_match else None
+                    
+                    # Extract destination (look for city names or airport codes)
+                    dest_patterns = [
+                        r'<span[^>]*class="[^"]*destination[^"]*"[^>]*>(.*?)</span>',
+                        r'<td[^>]*class="[^"]*destination[^"]*"[^>]*>(.*?)</td>',
+                        r'\b([A-Z]{3})\b',  # Airport code
+                    ]
+                    
+                    destination = "Unknown"
+                    for dp in dest_patterns:
+                        dest_match = re.search(dp, item, re.IGNORECASE)
+                        if dest_match:
+                            destination = re.sub(r'<[^>]+>', '', dest_match.group(1)).strip()
+                            if len(destination) > 2:
+                                break
+                    
+                    # Extract status
+                    status = "on-time"
+                    item_lower = item.lower()
+                    if "delayed" in item_lower or "delay" in item_lower:
+                        status = "delayed"
+                    elif "boarding" in item_lower:
+                        status = "boarding"
+                    elif "departed" in item_lower or "left" in item_lower:
+                        status = "departed"
+                    elif "cancelled" in item_lower or "canceled" in item_lower:
+                        status = "cancelled"
+                    
+                    if flight_code and time_str:
+                        flights.append({
+                            "code": flight_code.replace(" ", ""),
+                            "airline": flight_code[:2] if len(flight_code) >= 2 else "Unknown",
+                            "destination": destination,
+                            "time": time_str,
+                            "status": status,
+                            "delay": None,
+                            "gate": None,
+                            "terminal": None
+                        })
+                
+                if flights:
+                    break
+        except Exception as e:
+            print(f"Error parsing HTML fallback: {e}")
     
     return flights[:15]  # Limit to 15 flights
 

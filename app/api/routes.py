@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from app.services import weather, news, transit, events, air_quality, markets
-from app.services import hackernews, parking, trains, bikes
+from app.services import parking, trains, bikes
 from app.services import emergency, cameras, flights, ticker, map_data
 
 router = APIRouter()
@@ -36,11 +36,6 @@ async def api_weather():
 @router.get("/api/news")
 async def api_news():
     return await news.get_news()
-
-
-@router.get("/api/hackernews")
-async def api_hackernews():
-    return await hackernews.get_hackernews()
 
 
 @router.get("/api/transit")
@@ -168,8 +163,14 @@ async def partial_emergency(request: Request):
 
 @router.get("/partial/cameras", response_class=HTMLResponse)
 async def partial_cameras(request: Request):
-    data = await cameras.get_cameras_data()
-    return templates.TemplateResponse("partials/cameras.html", {"request": request, "cameras": data})
+    data = await cameras.get_cameras_data(panel_index=0)
+    return templates.TemplateResponse("partials/cameras.html", {"request": request, "cameras": data, "panel_suffix": ""})
+
+
+@router.get("/partial/cameras2", response_class=HTMLResponse)
+async def partial_cameras2(request: Request):
+    data = await cameras.get_cameras_data(panel_index=1)
+    return templates.TemplateResponse("partials/cameras.html", {"request": request, "cameras": data, "panel_suffix": "2"})
 
 
 @router.get("/partial/flights", response_class=HTMLResponse)

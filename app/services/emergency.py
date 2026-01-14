@@ -129,13 +129,15 @@ def parse_p2000_html(html_content: str) -> list:
         else:
             incident_type = classify_incident(message)
         
-        # Extract location from message
+        # Extract location and postcode from message
         location = extract_location(message) or region or "Amsterdam"
+        postcode = extract_postcode(message)
         
         incident = {
             "type": incident_type,
             "text": clean_text(message),
             "location": location,
+            "postcode": postcode,
             "time": time_str
         }
         
@@ -175,10 +177,12 @@ def parse_p2000_feed(xml_content: str) -> list:
             if is_amsterdam or is_nearby or len(incidents) < 15:
                 incident_type = classify_incident(title)
                 location = extract_location(title + " " + desc) or "Amsterdam"
+                postcode = extract_postcode(title + " " + desc)
                 incident = {
                     "type": incident_type,
                     "text": clean_text(title),
                     "location": location,
+                    "postcode": postcode,
                     "time": parse_time(date_match.group(1) if date_match else None)
                 }
                 incidents.append(incident)
@@ -205,6 +209,17 @@ def clean_text(text: str) -> str:
     text = re.sub(r'<[^>]+>', '', text)
     text = text.strip()
     return text[:80] + "..." if len(text) > 80 else text
+
+def extract_postcode(text: str) -> Optional[str]:
+    """Extract Dutch postcode from text (format: 1234AB or 1234 AB)"""
+    # Dutch postcode pattern: 4 digits + 2 letters (optional space)
+    postcode_pattern = r'\b(\d{4}\s?[A-Z]{2})\b'
+    match = re.search(postcode_pattern, text, re.IGNORECASE)
+    if match:
+        # Normalize: remove space, uppercase letters
+        postcode = match.group(1).replace(' ', '').upper()
+        return postcode
+    return None
 
 def extract_location(text: str) -> Optional[str]:
     """Try to extract location from text"""

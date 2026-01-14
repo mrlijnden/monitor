@@ -58,20 +58,6 @@
             </div>
         </div>
 
-        <!-- Hacker News Panel (moved up) -->
-        <div class="panel" id="panel-hackernews">
-            <div class="panel-header">
-                <span class="panel-title">Hacker News</span>
-                <span class="panel-badge hn">HN</span>
-            </div>
-            <div class="panel-content"
-                 hx-get="/partial/hackernews"
-                 hx-trigger="sse:update[event.detail=='hackernews'] from:body"
-                 hx-swap="innerHTML">
-                {% include "partials/hackernews.html" %}
-            </div>
-        </div>
-
         <!-- Markets Panel (moved up) -->
         <div class="panel" id="panel-markets">
             <div class="panel-header">
@@ -130,14 +116,30 @@
             </div>
         </div>
 
-        <!-- Live Cameras Panel -->
+        <!-- Live Cameras Panel 1 -->
         <div class="panel" id="panel-cameras">
             <div class="panel-header">
                 <span class="panel-title">Live Cameras</span>
-                <span class="panel-badge camera">CAM</span>
+                <span class="panel-badge camera">CAM 1</span>
             </div>
             <div class="panel-content" style="padding: 0;"
                  hx-get="/partial/cameras"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <div class="camera-container">
+                    <div class="loading" style="padding: 10px;">Loading cameras...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Cameras Panel 2 -->
+        <div class="panel" id="panel-cameras2">
+            <div class="panel-header">
+                <span class="panel-title">Live Cameras</span>
+                <span class="panel-badge camera">CAM 2</span>
+            </div>
+            <div class="panel-content" style="padding: 0;"
+                 hx-get="/partial/cameras2"
                  hx-trigger="load"
                  hx-swap="innerHTML">
                 <div class="camera-container">
@@ -466,6 +468,169 @@
                 });
             }, 1000);
         });
+
+        // P2000 Postcode Notification System
+        (function() {
+            let userPostcode = localStorage.getItem('p2000_postcode') || '';
+            let lastIncidentIds = new Set();
+            let notificationPermission = Notification.permission;
+
+            // Postcode configuration UI
+            function initPostcodeConfig() {
+                const configDiv = document.createElement('div');
+                configDiv.className = 'postcode-config';
+                configDiv.innerHTML = `
+                    <span style="color: var(--text-muted);">Postcode:</span>
+                    <input type="text" id="postcode-input" placeholder="1234AB" maxlength="6" 
+                           value="${userPostcode}" pattern="[0-9]{4}[A-Z]{2}" 
+                           style="text-transform: uppercase;">
+                    <button onclick="savePostcode()">Opslaan</button>
+                `;
+                document.body.appendChild(configDiv);
+
+                // Auto-format postcode input
+                const input = document.getElementById('postcode-input');
+                input.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/\s/g, '').toUpperCase();
+                    if (value.length > 4) {
+                        value = value.slice(0, 4) + ' ' + value.slice(4, 6);
+                    }
+                    e.target.value = value;
+                });
+
+                // Request notification permission on first load
+                if (notificationPermission === 'default') {
+                    Notification.requestPermission().then(permission => {
+                        notificationPermission = permission;
+                    });
+                }
+            }
+
+            window.savePostcode = function() {
+                const input = document.getElementById('postcode-input');
+                let postcode = input.value.replace(/\s/g, '').toUpperCase();
+                
+                // Validate format
+                if (/^\d{4}[A-Z]{2}$/.test(postcode)) {
+                    userPostcode = postcode;
+                    localStorage.setItem('p2000_postcode', postcode);
+                    showToast('Postcode opgeslagen: ' + postcode);
+                    // Check current incidents immediately
+                    checkIncidentsForPostcode();
+                } else {
+                    showToast('Ongeldige postcode. Gebruik formaat: 1234AB', true);
+                }
+            };
+
+            function showToast(message, error = false) {
+                const toast = document.createElement('div');
+                toast.style.cssText = `
+                    position: fixed;
+                    bottom: 80px;
+                    right: 20px;
+                    background: ${error ? 'rgba(255, 51, 51, 0.95)' : 'rgba(0, 204, 204, 0.95)'};
+                    color: var(--text-secondary);
+                    padding: 10px 15px;
+                    border-radius: 4px;
+                    font-size: 11px;
+                    z-index: 10001;
+                    animation: slideInRight 0.3s ease-out;
+                `;
+                toast.textContent = message;
+                document.body.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.animation = 'slideOutRight 0.3s ease-out forwards';
+                    setTimeout(() => toast.remove(), 300);
+                }, 3000);
+            }
+
+            function showNotification(incident) {
+                const icon = incident.type === 'fire' ? '🚒' : 
+                            incident.type === 'ambulance' ? '🚑' : '🚔';
+                const typeLabel = incident.type === 'fire' ? 'BRAND' :
+                                 incident.type === 'ambulance' ? 'AMBULANCE' : 'POLITIE';
+                const color = incident.type === 'fire' ? '#ff0000' :
+                             incident.type === 'ambulance' ? '#ff9900' : '#0066ff';
+
+                // Browser notification
+                if (notificationPermission === 'granted') {
+                    new Notification(`P2000 Alert: ${typeLabel}`, {
+                        body: `${incident.text}\n${incident.location}${incident.postcode ? ' - ' + incident.postcode : ''}`,
+                        icon: '/static/favicon.ico',
+                        tag: `p2000-${incident.postcode}-${incident.time}`,
+                        requireInteraction: true
+                    });
+                }
+
+                // UI popup
+                const popup = document.createElement('div');
+                popup.className = 'notification-popup';
+                popup.style.borderColor = color;
+                popup.innerHTML = `
+                    <div class="notification-header">
+                        <span class="notification-icon">${icon}</span>
+                        <span class="notification-title">P2000 ALERT - ${typeLabel}</span>
+                        <span class="notification-close" onclick="this.parentElement.parentElement.remove()">×</span>
+                    </div>
+                    <div class="notification-body">
+                        ${incident.text}<br>
+                        <span class="notification-location">${incident.location}</span>
+                        ${incident.postcode ? `<span class="notification-postcode">${incident.postcode}</span>` : ''}
+                    </div>
+                    <div class="notification-time">${incident.time}</div>
+                `;
+                document.body.appendChild(popup);
+
+                // Auto-remove after 10 seconds
+                setTimeout(() => {
+                    if (popup.parentElement) {
+                        popup.classList.add('hide');
+                        setTimeout(() => popup.remove(), 300);
+                    }
+                }, 10000);
+            }
+
+            function checkIncidentsForPostcode() {
+                if (!userPostcode) return;
+
+                fetch('/api/emergency')
+                    .then(res => res.json())
+                    .then(data => {
+                        const currentIncidentIds = new Set();
+                        
+                        data.incidents.forEach(inc => {
+                            // Create unique ID for incident
+                            const incidentId = `${inc.postcode || 'no-pc'}-${inc.time}-${inc.text.substring(0, 20)}`;
+                            currentIncidentIds.add(incidentId);
+
+                            // Check if this is a new incident matching user's postcode
+                            if (inc.postcode && inc.postcode === userPostcode && !lastIncidentIds.has(incidentId)) {
+                                showNotification(inc);
+                            }
+                        });
+
+                        lastIncidentIds = currentIncidentIds;
+                    })
+                    .catch(err => console.error('Failed to check incidents:', err));
+            }
+
+            // Initialize on page load
+            initPostcodeConfig();
+            
+            // Check incidents every 30 seconds (same as emergency panel refresh)
+            if (userPostcode) {
+                checkIncidentsForPostcode();
+                setInterval(checkIncidentsForPostcode, 30000);
+            }
+
+            // Also check when emergency panel updates via HTMX
+            document.body.addEventListener('htmx:afterSwap', function(event) {
+                if (event.detail.target.id === 'panel-emergency' || 
+                    event.detail.target.closest('#panel-emergency')) {
+                    setTimeout(checkIncidentsForPostcode, 1000);
+                }
+            });
+        })();
     </script>
 </body>
 </html>

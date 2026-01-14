@@ -5,6 +5,7 @@
         {% if incident.type == 'fire' %}BRAND{% elif incident.type == 'ambulance' %}A1{% else %}POL{% endif %}
     </span>
     <span class="emergency-text">{{ incident.text }}</span>
+    {% if incident.postcode %}<span style="color: var(--accent-yellow); font-weight: bold; margin: 0 5px;">{{ incident.postcode }}</span>{% endif %}
     <span class="emergency-time">{{ incident.time }}</span>
 </div>
 {% endfor %}
