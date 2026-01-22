@@ -1,9 +1,12 @@
+from typing import Optional
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from app.services import weather, news, transit, events, air_quality, markets
 from app.services import parking, trains, bikes
-from app.services import emergency, cameras, flights, ticker, map_data, vision
+from app.services import emergency, cameras, flights, ticker, map_data, vision, traffic
+from app.services import flightradar
+from app.core.database import get_recent_detections, get_detection_stats, get_detections_timeline, get_panel_history, get_latest_panel_data
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -182,6 +185,12 @@ async def partial_ticker(request: Request):
     return templates.TemplateResponse("partials/ticker.html", {"request": request, "ticker": data})
 
 
+@router.get("/api/traffic")
+async def api_traffic():
+    """Get ANWB traffic jams and incidents"""
+    return await traffic.get_traffic()
+
+
 @router.get("/api/map/vehicles")
 async def api_map_vehicles():
     """Get real-time transit vehicle positions"""
@@ -224,3 +233,74 @@ async def partial_ai_detection(request: Request, camera_id: str):
         "camera_id": camera_id,
         "panel_suffix": f"_{camera_id}"
     })
+
+
+@router.get("/api/detections")
+async def api_detections(camera_id: Optional[str] = None, limit: int = 100):
+    """Get recent detections from database"""
+    detections = await get_recent_detections(camera_id=camera_id, limit=limit)
+    # Convert datetime objects to strings for JSON serialization
+    for d in detections:
+        if d.get('detected_at'):
+            d['detected_at'] = d['detected_at'].isoformat()
+    return {"detections": detections, "count": len(detections)}
+
+
+@router.get("/api/detections/stats")
+async def api_detection_stats(camera_id: Optional[str] = None):
+    """Get detection statistics"""
+    stats = await get_detection_stats(camera_id=camera_id)
+    # Convert datetime objects to strings
+    if stats.get('first_detection'):
+        stats['first_detection'] = stats['first_detection'].isoformat()
+    if stats.get('last_detection'):
+        stats['last_detection'] = stats['last_detection'].isoformat()
+    if stats.get('avg_objects'):
+        stats['avg_objects'] = float(stats['avg_objects'])
+    return stats
+
+
+@router.get("/api/detections/timeline")
+async def api_detections_timeline(hours: int = 24):
+    """Get hourly detection counts for both cameras over time"""
+    return await get_detections_timeline(hours=hours)
+
+
+@router.get("/api/map/flights")
+async def api_map_flights():
+    """Get live flight positions from FlightRadar24"""
+    return await flightradar.get_flight_positions()
+
+
+# Historical data endpoints
+VALID_PANELS = {
+    "weather", "news", "transit", "trains", "events", "air_quality",
+    "markets", "parking", "bikes", "flights", "emergency", "traffic"
+}
+
+
+@router.get("/api/history/{panel_name}")
+async def api_panel_history(panel_name: str, hours: int = 24, limit: int = 100):
+    """Get historical data for a panel (requires DATABASE_URL)"""
+    if panel_name not in VALID_PANELS:
+        return {"error": f"Invalid panel. Valid panels: {', '.join(sorted(VALID_PANELS))}"}
+
+    history = await get_panel_history(panel_name, hours=hours, limit=limit)
+    return {
+        "panel": panel_name,
+        "hours": hours,
+        "count": len(history),
+        "history": history
+    }
+
+
+@router.get("/api/history/{panel_name}/latest")
+async def api_panel_latest_from_db(panel_name: str):
+    """Get the most recent data for a panel from database (fallback endpoint)"""
+    if panel_name not in VALID_PANELS:
+        return {"error": f"Invalid panel. Valid panels: {', '.join(sorted(VALID_PANELS))}"}
+
+    data = await get_latest_panel_data(panel_name)
+    if data:
+        return {"panel": panel_name, "data": data, "source": "database"}
+    return {"panel": panel_name, "data": None, "source": "database", "error": "No data found"}

@@ -41,11 +41,13 @@ REFRESH_INTERVALS = {
     "events": 3600,       # 1 hour
     "air_quality": 900,   # 15 minutes
     "markets": 120,       # 2 minutes
-    "parking": 300,       # 5 minutes
+    "parking": 900,       # 15 minutes (Selenium - reduced frequency)
     "bikes": 900,         # 15 minutes
-    "flights": 120,       # 2 minutes
-    "vision": 30,         # 30 seconds (AI detection refresh)
+    "flights": 300,       # 5 minutes (Selenium - reduced frequency)
+    "vision": 300,        # 5 minutes (on-demand only, saves API costs)
     "emergency": 60,      # 1 minute (P2000 emergency feed)
+    "traffic": 600,       # 10 minutes (Selenium - reduced frequency)
+    "flightradar": 15,    # 15 seconds (live flight positions)
 }
 
 # Cache TTL (slightly longer than refresh to handle delays)
@@ -57,9 +59,10 @@ CACHE_TTL = {
     "events": 4000,
     "air_quality": 1000,
     "markets": 150,
-    "parking": 350,
+    "parking": 1000,    # 16.5 min (Selenium source)
     "bikes": 1000,
-    "flights": 150,
-    "vision": 45,
+    "flights": 350,     # 5.8 min (Selenium source)
+    "vision": 330,      # 5.5 min cache (slightly longer than refresh)
     "emergency": 90,
+    "traffic": 700,     # 11.5 min (Selenium source)
 }

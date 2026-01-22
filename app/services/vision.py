@@ -11,6 +11,7 @@ from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from app.config import amsterdam_now, CACHE_TTL
 from app.core.cache import cache
+from app.core.database import save_detection
 
 # Colors for bounding boxes (RGB)
 BBOX_COLORS = [
@@ -28,7 +29,8 @@ BBOX_COLORS = [
 GOOGLE_VISION_API_URL = "https://vision.googleapis.com/v1/images:annotate"
 GOOGLE_VISION_API_KEY = None  # Set via GOOGLE_VISION_API_KEY env var
 
-# Hugging Face Inference API (requires free API key from huggingface.co/settings/tokens)
+# Hugging Face Inference API (requires API key from huggingface.co/settings/tokens)
+# Uses the router endpoint which routes to the correct provider
 HUGGINGFACE_API_URL = "https://router.huggingface.co/hf-inference/models/facebook/detr-resnet-50"
 HUGGINGFACE_API_KEY = None  # Set via HUGGINGFACE_API_KEY env var
 
@@ -345,8 +347,8 @@ async def get_camera_detections(camera_id: str) -> Dict:
     # Fetch fresh detection
     detection = await detect_camera_objects(camera_id)
 
-    # Cache for 60 seconds
-    cache.set(cache_key, detection, 60)
+    # Cache for 5 minutes to save API costs
+    cache.set(cache_key, detection, CACHE_TTL.get("vision", 300))
     return detection
 
 
@@ -583,15 +585,32 @@ async def refresh_annotated_frame(camera_id: str) -> Optional[bytes]:
         objects = await detect_objects_google_vision(image_bytes)
 
     if not objects:
-        # Cache original image if no detections
-        cache.set(f"vision_image_{camera_id}", image_bytes, 60)
+        # Cache original image if no detections (5 minutes)
+        cache.set(f"vision_image_{camera_id}", image_bytes, CACHE_TTL.get("vision", 300))
         return image_bytes
+
+    # Build summary of detected objects
+    summary = {}
+    for obj in objects:
+        label = obj.get('label') or obj.get('name', 'Unknown')
+        summary[label] = summary.get(label, 0) + 1
+
+    # Save to database
+    detection_id = await save_detection(
+        camera_id=camera_id,
+        objects=objects,
+        summary=summary,
+        source="huggingface",
+        frame_size=len(image_bytes)
+    )
+    if detection_id:
+        print(f"[VISION] Saved detection #{detection_id} to database")
 
     # Draw bounding boxes
     annotated_image = draw_bounding_boxes(image_bytes, objects)
 
-    # Cache for 60 seconds (will be refreshed by scheduler every 30s)
-    cache.set(f"vision_image_{camera_id}", annotated_image, 60)
+    # Cache for 5 minutes (on-demand only, no scheduler)
+    cache.set(f"vision_image_{camera_id}", annotated_image, CACHE_TTL.get("vision", 300))
     print(f"Refreshed AI detection for camera {camera_id}: {len(objects)} objects")
 
     return annotated_image

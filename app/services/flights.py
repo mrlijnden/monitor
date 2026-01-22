@@ -487,16 +487,19 @@ async def scrape_flightradar24_with_selenium() -> str:
             driver = webdriver.Chrome(service=service, options=options)
             driver.get(FLIGHTRADAR24_AMS_URL)
             
-            # Wait for page to load
+            # Wait for page to load and flight tables to appear
             try:
                 WebDriverWait(driver, 20).until(
                     EC.presence_of_element_located((By.TAG_NAME, "body"))
                 )
-                # Wait for flight tables to load
-                import time
-                time.sleep(5)  # Give JavaScript time to load flight data
+                # Wait for tables to load (instead of fixed sleep)
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.TAG_NAME, "table"))
+                )
             except:
-                pass
+                # If no tables found, wait briefly then continue
+                import time
+                time.sleep(2)
             
             html_content = driver.page_source
             driver.quit()

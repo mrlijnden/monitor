@@ -239,8 +239,19 @@ async def scrape_with_selenium(url: str) -> List[Dict]:
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
 
-            # Wait for JavaScript to load data
-            time.sleep(5)
+            # Wait for network activity to settle (instead of fixed sleep)
+            last_log_count = 0
+            stable_count = 0
+            for _ in range(10):  # Max 5 seconds (10 * 0.5)
+                logs = driver.get_log('performance')
+                if len(logs) == last_log_count and last_log_count > 20:
+                    stable_count += 1
+                    if stable_count >= 2:  # Stable for 1 second
+                        break
+                else:
+                    stable_count = 0
+                last_log_count = len(logs)
+                time.sleep(0.5)
 
             # Get performance logs to find network responses
             logs = driver.get_log('performance')

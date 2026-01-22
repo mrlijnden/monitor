@@ -160,19 +160,15 @@
             }, 35000); // Slightly offset from backend refresh
         </script>
 
-        <!-- System Status Panel -->
-        <div class="panel" id="panel-system">
+        <!-- AI Detection Leaderboard Panel -->
+        <div class="panel" id="panel-ai-graph">
             <div class="panel-header">
-                <span class="panel-title">System</span>
-                <span class="panel-badge">SYS</span>
+                <span class="panel-title">AI Detections</span>
+                <span class="panel-badge camera">24H</span>
             </div>
-            <div class="panel-content">
-                <div style="text-align: center; padding: 15px;">
-                    <div style="font-size: 20px; color: var(--accent-cyan); margin-bottom: 8px;">AMSTERDAM</div>
-                    <div style="font-size: 9px; color: var(--text-muted);">SITUATION MONITOR v2.0</div>
-                    <div style="font-size: 8px; color: var(--text-dim); margin-top: 12px;">
-                        <span class="status-dot online"></span> All systems operational
-                    </div>
+            <div class="panel-content" style="padding: 6px 8px;">
+                <div id="detection-leaderboard">
+                    <div class="leaderboard-loading">Loading detections...</div>
                 </div>
             </div>
         </div>
@@ -315,6 +311,8 @@
             // Layers for different data
             let vehicleLayer = L.layerGroup().addTo(map);
             let emergencyLayer = L.layerGroup().addTo(map);
+            let trafficLayer = L.layerGroup().addTo(map);
+            let flightLayer = L.layerGroup().addTo(map);
 
             // Vehicle icons
             const vehicleIcons = {
@@ -447,6 +445,127 @@
                 }
             }
 
+            // Traffic icons
+            const trafficIcons = {
+                'severe': L.divIcon({
+                    html: '<div class="traffic-icon severe">&#9888;</div>',
+                    className: 'traffic-div-icon',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                }),
+                'moderate': L.divIcon({
+                    html: '<div class="traffic-icon moderate">&#9888;</div>',
+                    className: 'traffic-div-icon',
+                    iconSize: [22, 22],
+                    iconAnchor: [11, 11]
+                }),
+                'minor': L.divIcon({
+                    html: '<div class="traffic-icon minor">&#9679;</div>',
+                    className: 'traffic-div-icon',
+                    iconSize: [18, 18],
+                    iconAnchor: [9, 9]
+                })
+            };
+
+            // Traffic severity colors
+            const trafficColors = {
+                'severe': '#ff0000',
+                'moderate': '#ff9900',
+                'minor': '#ffcc00',
+                'info': '#888888'
+            };
+
+            // Fetch and update ANWB traffic data
+            async function updateTraffic() {
+                try {
+                    const response = await fetch('/api/traffic');
+                    const data = await response.json();
+
+                    trafficLayer.clearLayers();
+
+                    data.items.forEach(item => {
+                        if (item.lat && item.lng) {
+                            const icon = trafficIcons[item.severity] || trafficIcons['minor'];
+                            const color = trafficColors[item.severity] || '#ffcc00';
+
+                            const marker = L.marker([item.lat, item.lng], { icon: icon });
+
+                            const delayText = item.delay > 0 ? `<b style="color:${color}">+${item.delay} min</b>` : '';
+                            const distText = item.distance > 0 ? `${item.distance} km` : '';
+
+                            marker.bindPopup(`
+                                <div style="min-width: 180px;">
+                                    <b style="color:${color}; font-size: 13px;">&#9888; ${item.road}</b><br>
+                                    <span style="font-size: 11px;">${item.location}</span><br>
+                                    ${delayText} ${distText ? `- ${distText}` : ''}<br>
+                                    ${item.reason ? `<small style="color: #888;">${item.reason}</small>` : ''}
+                                </div>
+                            `);
+
+                            trafficLayer.addLayer(marker);
+                        }
+                    });
+
+                    console.log(`Map: ${data.items.length} traffic jams`);
+                } catch (e) {
+                    console.error('Failed to fetch traffic:', e);
+                }
+            }
+
+            // Flight icon (rotated based on heading)
+            function createFlightIcon(heading, altitude) {
+                const color = altitude > 10000 ? '#ffcc00' : altitude > 3000 ? '#ff9900' : '#ff5500';
+                const size = altitude > 10000 ? 16 : altitude > 3000 ? 14 : 12;
+                return L.divIcon({
+                    html: `<div class="flight-icon" style="transform: rotate(${heading}deg); color: ${color}; font-size: ${size}px;">✈</div>`,
+                    className: 'flight-div-icon',
+                    iconSize: [size, size],
+                    iconAnchor: [size/2, size/2]
+                });
+            }
+
+            // Fetch and update FlightRadar24 data
+            async function updateFlights() {
+                try {
+                    const response = await fetch('/api/map/flights');
+                    const data = await response.json();
+
+                    flightLayer.clearLayers();
+
+                    data.flights.forEach(f => {
+                        const icon = createFlightIcon(f.heading, f.altitude);
+                        const marker = L.marker([f.lat, f.lng], { icon: icon });
+
+                        const altFt = f.altitude.toLocaleString();
+                        const altM = Math.round(f.altitude * 0.3048).toLocaleString();
+                        const speedKts = f.speed;
+                        const speedKmh = Math.round(f.speed * 1.852);
+
+                        const vspeedText = f.vspeed > 100 ? `<span style="color:#00ff00">↑${f.vspeed}</span>` :
+                                          f.vspeed < -100 ? `<span style="color:#ff6600">↓${Math.abs(f.vspeed)}</span>` : '';
+
+                        marker.bindPopup(`
+                            <div style="min-width: 160px;">
+                                <b style="color:#ffcc00; font-size: 13px;">✈ ${f.callsign}</b><br>
+                                <span style="color:#888">${f.aircraft}</span> ${f.airline ? `(${f.airline})` : ''}<br>
+                                ${f.origin ? `${f.origin} → ${f.destination || '???'}` : ''}<br>
+                                <div style="margin-top: 5px; font-size: 10px;">
+                                    ALT: ${altFt} ft (${altM}m) ${vspeedText}<br>
+                                    SPD: ${speedKts} kts (${speedKmh} km/h)<br>
+                                    HDG: ${f.heading}°
+                                </div>
+                            </div>
+                        `);
+
+                        flightLayer.addLayer(marker);
+                    });
+
+                    console.log(`Map: ${data.flights.length} flights`);
+                } catch (e) {
+                    console.error('Failed to fetch flights:', e);
+                }
+            }
+
             // Add legend to map
             const legend = L.control({position: 'bottomleft'});
             legend.onAdd = function(map) {
@@ -458,10 +577,20 @@
                     <div class="map-legend-item"><span style="margin-right: 6px;">🚇</span> Metro</div>
                     <div class="map-legend-item"><span style="margin-right: 6px;">⛴️</span> Ferry</div>
                     <div style="border-top: 1px solid #333; margin: 5px 0;"></div>
+                    <div style="font-size: 9px; color: #888; margin-bottom: 4px;">— VERKEER —</div>
+                    <div class="map-legend-item"><span style="color: #ff0000; margin-right: 6px;">⚠</span> File (ernstig)</div>
+                    <div class="map-legend-item"><span style="color: #ff9900; margin-right: 6px;">⚠</span> File (matig)</div>
+                    <div class="map-legend-item"><span style="color: #ffcc00; margin-right: 6px;">●</span> File (licht)</div>
+                    <div style="border-top: 1px solid #333; margin: 5px 0;"></div>
                     <div style="font-size: 9px; color: #888; margin-bottom: 4px;">— P2000 —</div>
                     <div class="map-legend-item"><span style="margin-right: 6px;">🚒</span> Brand</div>
                     <div class="map-legend-item"><span style="margin-right: 6px;">🚑</span> Ambulance</div>
                     <div class="map-legend-item"><span style="margin-right: 6px;">🚔</span> Politie</div>
+                    <div style="border-top: 1px solid #333; margin: 5px 0;"></div>
+                    <div style="font-size: 9px; color: #888; margin-bottom: 4px;">— FLIGHTS —</div>
+                    <div class="map-legend-item"><span style="color: #ff5500; margin-right: 6px;">✈</span> Low (&lt;3k ft)</div>
+                    <div class="map-legend-item"><span style="color: #ff9900; margin-right: 6px;">✈</span> Mid (3-10k ft)</div>
+                    <div class="map-legend-item"><span style="color: #ffcc00; margin-right: 6px;">✈</span> High (&gt;10k ft)</div>
                 `;
                 return div;
             };
@@ -470,8 +599,12 @@
             // Initial load and refresh intervals
             updateVehicles();
             updateEmergencies();
+            updateTraffic();
+            updateFlights();
             setInterval(updateVehicles, 10000);
             setInterval(updateEmergencies, 30000);
+            setInterval(updateTraffic, 60000);
+            setInterval(updateFlights, 15000);  // FlightRadar24 every 15s
 
             // Pulse effect
             setInterval(() => {
@@ -710,11 +843,69 @@
 
             // Also check when emergency panel updates via HTMX
             document.body.addEventListener('htmx:afterSwap', function(event) {
-                if (event.detail.target.id === 'panel-emergency' || 
+                if (event.detail.target.id === 'panel-emergency' ||
                     event.detail.target.closest('#panel-emergency')) {
                     setTimeout(checkIncidentsForPostcode, 1000);
                 }
             });
+        })();
+
+        // AI Detection Leaderboard
+        (function() {
+            const categoryIcons = {
+                'person': '🚶', 'car': '🚗', 'bicycle': '🚲', 'truck': '🚛',
+                'bus': '🚌', 'train': '🚂', 'motorcycle': '🏍', 'traffic light': '🚦',
+                'dog': '🐕', 'cat': '🐈', 'bird': '🐦', 'boat': '🚤', 'airplane': '✈️'
+            };
+
+            async function updateLeaderboard() {
+                try {
+                    const response = await fetch('/api/detections/timeline?hours=24');
+                    const data = await response.json();
+                    const container = document.getElementById('detection-leaderboard');
+                    if (!container) return;
+
+                    const categories = data.categories || {};
+
+                    // Calculate totals and sort
+                    const items = Object.entries(categories)
+                        .map(([cat, values]) => ({ cat, count: values.reduce((a, b) => a + b, 0) }))
+                        .filter(item => item.count > 0)
+                        .sort((a, b) => b.count - a.count);
+
+                    const grandTotal = items.reduce((sum, item) => sum + item.count, 0);
+
+                    if (items.length === 0) {
+                        container.innerHTML = '<div style="color:#666;text-align:center;padding:20px;">No detections yet</div>';
+                        return;
+                    }
+
+                    // Build leaderboard HTML
+                    let html = `<div class="lb-total">TOTAL: <span>${grandTotal.toLocaleString()}</span></div>`;
+
+                    items.forEach((item, index) => {
+                        const pct = ((item.count / grandTotal) * 100).toFixed(1);
+                        const icon = categoryIcons[item.cat] || '📦';
+                        const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+
+                        html += `
+                            <div class="lb-row ${rankClass}">
+                                <span class="lb-rank">#${index + 1}</span>
+                                <span class="lb-icon">${icon}</span>
+                                <span class="lb-name">${item.cat}</span>
+                                <span class="lb-count">${item.count}</span>
+                                <span class="lb-pct">${pct}%</span>
+                            </div>`;
+                    });
+
+                    container.innerHTML = html;
+                } catch (e) {
+                    console.error('Failed to fetch leaderboard:', e);
+                }
+            }
+
+            updateLeaderboard();
+            setInterval(updateLeaderboard, 120000);
         })();
     </script>
 </body>
